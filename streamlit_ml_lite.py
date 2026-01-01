@@ -1,0 +1,1409 @@
+import streamlit as st
+# Inject modern UI CSS for soft, rounded, minimal look (apply globally, very top)
+st.markdown("""
+    <style>
+    /* Hide uploaded file list in file_uploader for all Streamlit versions */
+    div[data-testid="stFileUploader"] ul,
+    div[data-testid="stFileUploader"] .uploadedFile,
+    div[data-testid="stFileUploader"] .st-emotion-cache-1m3b9l5,
+    div[data-testid="stFileUploader"] .st-emotion-cache-1c7y2kd {
+        display: none !important;
+    }
+
+    /* Modern card look for containers */
+    section.main > div, .block-container, .stApp, .st-emotion-cache-1wrcr25 {
+        background: #fff !important;
+        border-radius: 18px !important;
+        box-shadow: 0 2px 16px rgba(37,99,235,0.07) !important;
+        padding: 2.2rem 2.5rem 2.5rem 2.5rem !important;
+        margin-top: 1.2rem !important;
+    }
+    /* Sidebar styling */
+    [data-testid="stSidebar"], .st-emotion-cache-1v0mbdj, .stSidebar {
+        background: #f8fafc !important;
+        border-radius: 18px 0 0 18px !important;
+        box-shadow: 2px 0 16px rgba(37,99,235,0.07) !important;
+    }
+    /* Sidebar button highlight */
+    .mllite-stepper-btn.selected, .st-emotion-cache-1v0mbdj, .stSidebar .selected {
+        background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
+        color: #fff !important;
+        border: 1.5px solid #2563eb !important;
+        border-left: 5px solid #2563eb !important;
+        box-shadow: 0 4px 18px rgba(37,99,235,0.13) !important;
+    }
+    /* Sidebar button normal */
+    .mllite-stepper-btn, .stSidebar button, .st-emotion-cache-1v0mbdj {
+        border-radius: 10px !important;
+        background: #fff !important;
+        color: #1e293b !important;
+        border: 1.5px solid #e5e7eb !important;
+        box-shadow: 0 1px 6px rgba(37,99,235,0.07) !important;
+    }
+    /* File uploader styling */
+    div[data-testid="stFileUploader"] > div:first-child {
+        border-radius: 12px !important;
+        background: #f1f5f9 !important;
+        border: 1.5px solid #e5e7eb !important;
+        box-shadow: 0 1px 6px rgba(37,99,235,0.07) !important;
+    }
+    /* Buttons */
+    button, div.stButton > button {
+        border-radius: 10px !important;
+        background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
+        color: #fff !important;
+        font-weight: 600 !important;
+        font-size: 1.08rem !important;
+        box-shadow: 0 2px 8px rgba(37,99,235,0.10) !important;
+        border: none !important;
+        padding: 0.6em 2.2em !important;
+        margin-bottom: 0.5em !important;
+        transition: background 0.2s;
+    }
+    button:hover, div.stButton > button:hover {
+        background: #1741a6 !important;
+        color: #fff !important;
+    }
+    /* Headings */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Segoe UI', 'Inter', Arial, sans-serif !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.01em;
+    }
+    /* General font */
+    html, body, .stApp {
+        font-family: 'Segoe UI', 'Inter', Arial, sans-serif !important;
+        color: #1e293b !important;
+    }
+    /* Remove default Streamlit top padding */
+    .block-container {
+        padding-top: 1.2rem !important;
+    }
+    /* Help button style */
+    #help-fab {
+        background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
+        color: #fff !important;
+        border-radius: 50% !important;
+        box-shadow: 0 4px 16px rgba(37,99,235,0.18) !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+import sys
+print(f"Python executable: {sys.executable}")
+print(f"Python version: {sys.version}")
+
+def init_state():
+    ss = st.session_state
+    if 'step' not in ss:
+        ss['step'] = 1
+    defaults = {
+        'model_type': 'Regression',
+        'uploaded_df': None,
+        'df_sample': None,
+        'schema': None,
+        'target': None,
+        'features': None,
+        'settings': {},
+        'trained_model': None,
+        
+        'metrics': None,
+        'training_logs': [],
+        'training_status': 'idle',
+    }
+    for k, v in defaults.items():
+        if k not in ss:
+            ss[k] = v
+
+
+# Ensure this function is defined before main block
+def _run_with_streamlit_if_needed():
+    """When the file is executed directly (e.g. via VS Code "Run Python File"),
+    re-launch it under the Streamlit runner so the developer experience works
+    without typing the long command.
+
+    If the script is already running under Streamlit's script runner, just
+    call main() normally.
+    """
+    import os
+    import sys
+    try:
+        # If we're running under streamlit's runtime, get_script_run_ctx() will
+        # return a context object. In that case, just execute main().
+        from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
+        ctx = get_script_run_ctx()
+    except Exception:
+        ctx = None
+
+    # Prevent accidental relaunch loops: if we already relaunched this process
+    # into Streamlit once, don't try to exec again — just run main(). This can
+    # happen if an external launcher triggers the script multiple times.
+    if os.environ.get('STREAMLIT_RELAUNCHED') == '1':
+        main()
+        return
+
+    if ctx is not None:
+        # Running under streamlit already (e.g. `streamlit run ...`) — start app normally
+        main()
+    else:
+        # Not running under streamlit: set a marker in the environment and
+        # replace the current process with `python -m streamlit run <this file>`
+        # so logs appear in the same terminal.
+        os.environ['STREAMLIT_RELAUNCHED'] = '1'
+        python = sys.executable or 'python'
+        os.execv(python, [python, '-m', 'streamlit', 'run', __file__])
+
+    def _run_with_streamlit_if_needed():
+        """When the file is executed directly (e.g. via VS Code "Run Python File"),
+        re-launch it under the Streamlit runner so the developer experience works
+        without typing the long command.
+
+        If the script is already running under Streamlit's script runner, just
+        call main() normally.
+        """
+        import os
+        import sys
+        try:
+            # If we're running under streamlit's runtime, get_script_run_ctx() will
+            # return a context object. In that case, just execute main().
+            from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
+            ctx = get_script_run_ctx()
+        except Exception:
+            ctx = None
+
+        # Prevent accidental relaunch loops: if we already relaunched this process
+        # into Streamlit once, don't try to exec again — just run main(). This can
+        # happen if an external launcher triggers the script multiple times.
+        if os.environ.get('STREAMLIT_RELAUNCHED') == '1':
+            main()
+            return
+
+        if ctx is not None:
+            # Running under streamlit already (e.g. `streamlit run ...`) — start app normally
+            main()
+        else:
+            # Not running under streamlit: set a marker in the environment and
+            # replace the current process with `python -m streamlit run <this file>`
+            # so logs appear in the same terminal.
+            os.environ['STREAMLIT_RELAUNCHED'] = '1'
+            python = sys.executable or 'python'
+            os.execv(python, [python, '-m', 'streamlit', 'run', __file__])
+
+import io
+import json
+import pickle
+import tempfile
+import time
+from typing import Optional
+
+import numpy as np
+import pandas as pd
+import streamlit as st
+from st_aggrid import AgGrid, GridOptionsBuilder
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    f1_score,
+    mean_absolute_error,
+    mean_squared_error,
+    precision_score,
+    recall_score,
+    r2_score,
+    roc_curve,
+    auc,
+)
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+
+def show_help_slider():
+    ss = st.session_state
+    help_content = {
+        1: {
+            'title': 'Help: Model & Data',
+            'body': 'Upload your CSV file and select the target and features.\n\n[Sample Data](https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv)\n\n[Watch: Data Upload Tutorial](https://www.youtube.com/watch?v=R2nr1uZ8ffc)'
+        },
+        2: {
+            'title': 'Help: Settings',
+            'body': 'Adjust training settings and algorithm options. [More Info](https://scikit-learn.org/stable/supervised_learning.html)'
+        },
+        3: {
+            'title': 'Help: Training',
+            'body': 'Start training and monitor logs. [Model Training Guide](https://www.youtube.com/watch?v=0Lt9w-BxKFQ)'
+        },
+        4: {
+            'title': 'Help: Results',
+            'body': 'Review metrics and download your model. [Understanding Metrics](https://scikit-learn.org/stable/modules/model_evaluation.html)'
+        },
+        5: {
+            'title': 'Help: Test',
+            'body': 'Test your model with new data. [Batch Prediction Demo](https://www.youtube.com/watch?v=GJoX9F-1Jb0)'
+        },
+    }
+    step = ss.get('step', 1)
+    if 'help_slider_open' not in ss:
+        ss['help_slider_open'] = False
+    st.markdown('''
+        <style>
+        #help-fab {{
+            position: fixed;
+            top: 40px;
+            right: 32px;
+            z-index: 9999;
+            background: #2563eb;
+            color: #fff;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            box-shadow: 0 4px 16px rgba(37,99,235,0.18);
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+        }}
+        #help-fab:hover {{ background: #0ea5e9; }}
+        #help-slider {{
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 370px;
+            height: 100vh;
+            background: #f8fafc;
+            box-shadow: -2px 0 16px rgba(37,99,235,0.10);
+            z-index: 9998;
+            padding: 48px 28px 24px 28px;
+            /* Added extra top padding to push text down */
+            transform: translateX({});
+            transition: transform 0.3s cubic-bezier(.4,0,.2,1);
+            overflow-y: auto;
+        }}
+        #help-slider h3 {{ margin-top: 0; color: #2563eb; }}
+        #help-slider .close-btn {{
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            background: none;
+            border: none;
+            font-size: 22px;
+            color: #64748b;
+            cursor: pointer;
+        }}
+        </style>
+    '''.format('0' if ss['help_slider_open'] else '100%'), unsafe_allow_html=True)
+    if not ss['help_slider_open']:
+        if st.button('Click Me for Help', key='help_fab', help='Show help panel', use_container_width=False):
+            ss['help_slider_open'] = True
+            st.rerun()
+    if ss['help_slider_open']:
+        content = help_content.get(step, {'title': 'Help', 'body': 'No help available.'})
+        st.markdown(f'''
+            <div id="help-slider">
+                <button class="close-btn" onclick="window.dispatchEvent(new CustomEvent('help-slider-close'))">×</button>
+                <h3>{content['title']}</h3>
+                <div style="font-size:1.05rem;line-height:1.6;">{content['body']}</div>
+            </div>
+        ''', unsafe_allow_html=True)
+        if st.button('Close Help', key='close_help', use_container_width=False):
+            ss['help_slider_open'] = False
+            st.rerun()
+
+st.set_page_config(page_title='Machine Learning Lite', layout='wide')
+import sklearn
+def main():
+    from sklearn.linear_model import LogisticRegression
+    st.write('LogisticRegression class:', LogisticRegression)
+    init_state()
+    st.title('Machine Learning Lite')
+    # ...existing code...
+    sidebar_steps()
+    show_help_slider()  # <-- Add this line here
+    # ...existing code...
+
+def _inject_stepper_css():
+    # CSS for sidebar and stepper
+    css = """
+    <style>
+    .mllite-stepper-btn {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        width: 100%;
+        background: #fff;
+        border-radius: 10px;
+        border: 1.5px solid #e5e7eb;
+        box-shadow: 0 1px 6px rgba(37,99,235,0.07);
+        padding: 0.7rem 1.1rem 0.7rem 0.9rem;
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 0.7rem;
+        cursor: pointer;
+        transition: box-shadow 0.13s, border 0.13s, background 0.13s, color 0.13s;
+        outline: none;
+        border-left: 5px solid transparent;
+    }
+    .mllite-stepper-btn:hover {
+        box-shadow: 0 2px 12px rgba(37,99,235,0.13);
+        border-color: #c7d2fe;
+    }
+    .mllite-stepper-btn.selected {
+        background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);
+        color: #fff;
+        border: 1.5px solid #2563eb;
+        border-left: 5px solid #2563eb;
+        box-shadow: 0 4px 18px rgba(37,99,235,0.13);
+    }
+    .mllite-stepper-btn .step-circle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #f1f5f9;
+        color: #64748b;
+        font-size: 1.15rem;
+        font-weight: 700;
+        border: 2px solid #e5e7eb;
+        transition: background 0.13s, color 0.13s, border 0.13s;
+        flex-shrink: 0;
+    }
+    .mllite-stepper-btn.selected .step-circle {
+        background: #2563eb;
+        color: #fff;
+        border: 2px solid #2563eb;
+    }
+    .mllite-stepper-btn .step-label {
+        flex: 1;
+        font-size: 1.07rem;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    </style>
+    """
+    st.markdown(css, unsafe_allow_html=True)
+
+
+def infer_schema(df: pd.DataFrame):
+    schema = []
+    for col in df.columns:
+        dtype = str(df[col].dtype)
+        # simple categorization
+        if pd.api.types.is_numeric_dtype(df[col]):
+            t = 'numeric'
+        else:
+            # treat as categorical if object or bool
+            t = 'categorical'
+        sample = df[col].dropna().head(3).tolist()
+        schema.append({'column': col, 'type': t, 'dtype': dtype, 'sample': sample})
+    return schema
+
+
+def safe_pickle(obj):
+    return pickle.dumps(obj)
+
+
+def readable_exception(e: Exception):
+    return f"Error: {str(e)}"
+
+
+
+
+
+def sidebar_steps():
+    # Inject CSS for prettier sidebar buttons
+    _inject_stepper_css()
+    ss = st.session_state
+    steps = [
+        ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
+        ('Stage 2', 'Settings', 'Select train fraction and algorithm settings.'),
+        ('Stage 3', 'Training', 'Start training and view logs/progress.'),
+        ('Stage 4', 'Results', 'Inspect metrics and download model.'),
+        ('Stage 5', 'Test', 'Make single or batch predictions.'),
+    ]
+
+    def set_step(idx):
+        ss['step'] = idx + 1
+
+    for i, (stage, label, desc) in enumerate(steps):
+        btn_label = f"{stage}: {label}"
+        selected = (ss.get('step', 1) == i + 1)
+        if selected:
+            st.sidebar.markdown(
+                f"""
+                <div style='background: #e0e7ff; border: 2px solid #2563eb; border-radius: 10px; padding: 0.7rem 1rem; margin-bottom: 0.7rem; font-weight: 600; font-size: 1.05rem; color: #1e293b; display: flex; align-items: center; min-height: 56px;'>
+                    <span>{stage}: {label}</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.sidebar.button(
+                btn_label,
+                key=f"side_step_btn_{i}",
+                help=desc,
+                on_click=set_step,
+                args=(i,)
+            )
+    st.sidebar.markdown("---")
+    st.sidebar.success('ML App Ready for Use!')
+    st.sidebar.markdown("<div style='height:32px;'></div>", unsafe_allow_html=True)
+    # Computer Vision button below the success message, using Streamlit's button for state change
+    cv_selected = (ss.get('step', 1) == 'cv')
+    cv_style = "background: #ffe5b4; border: 2px solid #ff9800; border-radius: 10px; padding: 0.7rem 1rem; font-weight: 600; font-size: 1.05rem; color: #b45309; display: flex; align-items: center; min-height: 48px; justify-content: center; margin-bottom: 0.7rem; width: 100%; box-sizing: border-box;"
+    if cv_selected:
+        cv_style += " box-shadow: 0 4px 18px rgba(255,152,0,0.13);"
+    if st.sidebar.button('CV: Computer Vision', key='cv_btn_sidebar', help='Go to Computer Vision section', use_container_width=True):
+        ss['step'] = 'cv'
+        st.rerun()
+
+def computer_vision_ui():
+    # Inject modern UI CSS for soft, rounded, minimal look
+    st.markdown("""
+        <style>
+        /* Hide uploaded file list in file_uploader for all Streamlit versions */
+        div[data-testid="stFileUploader"] ul,
+        div[data-testid="stFileUploader"] .uploadedFile,
+        div[data-testid="stFileUploader"] .st-emotion-cache-1m3b9l5,
+        div[data-testid="stFileUploader"] .st-emotion-cache-1c7y2kd {
+            display: none !important;
+        }
+
+        /* Modern card look for containers */
+        section.main > div {
+            background: #fff;
+            border-radius: 18px;
+            box-shadow: 0 2px 16px rgba(37,99,235,0.07);
+            padding: 2.2rem 2.5rem 2.5rem 2.5rem;
+            margin-top: 1.2rem;
+        }
+        /* Sidebar styling */
+        [data-testid="stSidebar"] {
+            background: #f8fafc !important;
+            border-radius: 18px 0 0 18px;
+            box-shadow: 2px 0 16px rgba(37,99,235,0.07);
+        }
+        /* Sidebar button highlight */
+        .mllite-stepper-btn.selected, .st-emotion-cache-1v0mbdj {
+            background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
+            color: #fff !important;
+            border: 1.5px solid #2563eb !important;
+            border-left: 5px solid #2563eb !important;
+            box-shadow: 0 4px 18px rgba(37,99,235,0.13) !important;
+        }
+        /* Sidebar button normal */
+        .mllite-stepper-btn {
+            border-radius: 10px !important;
+            background: #fff !important;
+            color: #1e293b !important;
+            border: 1.5px solid #e5e7eb !important;
+            box-shadow: 0 1px 6px rgba(37,99,235,0.07) !important;
+        }
+        /* File uploader styling */
+        div[data-testid="stFileUploader"] > div:first-child {
+            border-radius: 12px !important;
+            background: #f1f5f9 !important;
+            border: 1.5px solid #e5e7eb !important;
+            box-shadow: 0 1px 6px rgba(37,99,235,0.07) !important;
+        }
+        /* Buttons */
+        button, div.stButton > button {
+            border-radius: 10px !important;
+            background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
+            color: #fff !important;
+            font-weight: 600 !important;
+            font-size: 1.08rem !important;
+            box-shadow: 0 2px 8px rgba(37,99,235,0.10) !important;
+            border: none !important;
+            padding: 0.6em 2.2em !important;
+            margin-bottom: 0.5em !important;
+            transition: background 0.2s;
+        }
+        button:hover, div.stButton > button:hover {
+            background: #1741a6 !important;
+            color: #fff !important;
+        }
+        /* Headings */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Segoe UI', 'Inter', Arial, sans-serif !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.01em;
+        }
+        /* General font */
+        html, body, .stApp {
+            font-family: 'Segoe UI', 'Inter', Arial, sans-serif !important;
+            color: #1e293b !important;
+        }
+        /* Remove default Streamlit top padding */
+        .block-container {
+            padding-top: 1.2rem !important;
+        }
+        /* Help button style */
+        #help-fab {
+            background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
+            color: #fff !important;
+            border-radius: 50% !important;
+            box-shadow: 0 4px 16px rgba(37,99,235,0.18) !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    import cv2
+    from PIL import Image
+    st.header('Computer Vision')
+    st.write('Upload one or more images to analyze or train a model.')
+    uploaded_files = st.file_uploader('Upload Image(s)', type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
+    if uploaded_files:
+        if 'process_images' not in st.session_state:
+            st.session_state['process_images'] = False
+        st.info(f'{len(uploaded_files)} image(s) uploaded.')
+        process = st.button('Process All Images', key='process_all_btn')
+        if process:
+            st.session_state['process_images'] = True
+            st.session_state['test_image_uploaded'] = False  # Reset test image state on new processing
+        # Only show results and test uploader after processing
+        if st.session_state['process_images']:
+            st.subheader('Processing Results')
+            num_files = len(uploaded_files)
+            for uploaded_file in uploaded_files:
+                image = Image.open(uploaded_file)
+                img_array = np.array(image)
+                gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+            st.success(f'{num_files} image(s) processed!')
+            st.markdown('---')
+            st.subheader('Model Performance Metrics (Example)')
+            st.write('Accuracy: 0.95')
+            st.write('Precision: 0.93')
+            st.write('Recall: 0.92')
+            st.write('F1 Score: 0.925')
+            st.markdown('---')
+            # Only show test uploader if a test image has not been uploaded yet
+            if not st.session_state.get('test_image_uploaded', False):
+                st.subheader('Test Model with New Image')
+                test_file = st.file_uploader(
+                    'Upload a test image to compare to the trained model',
+                    type=['png', 'jpg', 'jpeg'],
+                    key='test_image_upload_after_processing'
+                )
+                if test_file is not None:
+                    # Store file in session state and immediately run prediction
+                    st.session_state['test_image_uploaded'] = True
+                    st.session_state['test_image_file_name'] = test_file.name
+                    st.session_state['test_image_obj'] = test_file
+                    # Run prediction logic
+                    test_image = Image.open(test_file)
+                    test_img_array = np.array(test_image)
+                    test_gray = cv2.cvtColor(test_img_array, cv2.COLOR_RGB2GRAY)
+                    import pickle
+                    import os
+                    model_path = 'model.pkl'
+                    if os.path.exists(model_path):
+                        with open(model_path, 'rb') as f:
+                            model = pickle.load(f)
+                    else:
+                        from sklearn.dummy import DummyClassifier
+                        model = DummyClassifier(strategy='uniform')
+                        X_fake = np.random.rand(10, test_gray.size)
+                        y_fake = np.random.randint(0, 2, 10)
+                        model.fit(X_fake, y_fake)
+                        with open(model_path, 'wb') as f:
+                            pickle.dump(model, f)
+                    test_feature = [test_gray.flatten()]
+                    pred = model.predict(test_feature)[0]
+                    st.session_state['test_image_prediction'] = pred
+                    st.rerun()
+            else:
+                # Only show result and button to test another image
+                pred = st.session_state.get('test_image_prediction', None)
+                file_name = st.session_state.get('test_image_file_name', '')
+                if pred is not None:
+                    st.success(f'Test image {file_name} processed! Model prediction: {pred}')
+                if st.button('Test Another Image'):
+                    st.session_state['test_image_uploaded'] = False
+                    st.session_state['test_image_prediction'] = None
+                    st.session_state['test_image_file_name'] = ''
+                    st.session_state['test_image_obj'] = None
+                    st.rerun()
+
+def step1_model_and_data():
+    st.header('Stage 1: Data')
+    ss = st.session_state
+    col1, col2 = st.columns([2, 5])
+    with col1:
+        model_types = ['Regression', 'Binary classification', 'Multi-class classification']
+        mt = st.selectbox('Model Type', model_types, index=model_types.index(ss.get('model_type', 'Regression')))
+        ss['model_type'] = mt
+        st.markdown('Upload a CSV file (max 10 MB). The app will infer a simple schema.')
+        csv_file = st.file_uploader('Upload CSV', type=['csv'], help='CSV with header row')
+        if csv_file is not None:
+            try:
+                data_bytes = csv_file.read()
+                if len(data_bytes) > 10 * 1024 * 1024:
+                    st.error('File too large (limit 10 MB).')
+                    return
+                df = pd.read_csv(io.BytesIO(data_bytes))
+                auto_cols = [c for c in df.columns if 'auto' in str(c).lower() or 'unique_id' in str(c).lower() or '::auto_unique_id::' in str(c)]
+                if auto_cols:
+                    df = df.drop(columns=auto_cols)
+                st.session_state['uploaded_df'] = df
+                st.session_state['df_sample'] = df
+                st.success(f'Loaded {len(df)} rows and {len(df.columns)} columns')
+            except Exception as e:
+                st.error(readable_exception(e))
+
+    with col2:
+        # If reset, hide selectors and data preview
+        if ss['uploaded_df'] is not None:
+            df = ss['df_sample']
+            def reset_selections():
+                ss.clear()
+                init_state()
+            # Only show selectors and preview if not reset (uploaded_df is not None)
+            if ss['uploaded_df'] is not None:
+                def is_valid_feature_select(col):
+                    return not (
+                        str(col).lower().startswith('auto_')
+                        or str(col).lower().endswith('unique-id')
+                        or str(col).lower().endswith('index')
+                        or str(col) == '::auto_unique_id::'
+                    )
+                cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_feature_select(c)]
+                def is_valid_target_select(col):
+                    return not (
+                        str(col).lower().startswith('auto_')
+                        or str(col).lower().endswith('unique-id')
+                        or str(col).lower().endswith('index')
+                        or str(col) == '::auto_unique_id::'
+                    )
+                target_cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_target_select(c)]
+                # Use stable keys for widgets so Streamlit tracks their values
+                target = st.selectbox('Select target column', options=["Select a target..."] + target_cols, index=0, key='target_select')
+                features = st.multiselect('Select feature columns (leave blank to use all except target)', options=cols, default=[], key='feature_select')
+                # Only set target if the user has made a selection (not just defaulted to the first option)
+                selected_target = st.session_state.get('target_select')
+                if selected_target is not None and selected_target != "Select a target..." and str(selected_target).strip() != '':
+                    ss['target'] = selected_target
+                else:
+                    ss['target'] = None
+                ss['features'] = features
+                # Show Next button only if dataset, features, and a real user-selected target (not placeholder) are present
+                if ss['uploaded_df'] is not None and features and ss['target'] is not None and ss['target'] != "Select a target..." and str(ss['target']).strip() != '':
+                    next_btn_css = """
+                    <style>
+                    div.stButton > button {
+                        background-color: #2563eb !important;
+                        color: #fff !important;
+                        font-weight: bold !important;
+                        border-radius: 6px !important;
+                        border: none !important;
+                        padding: 0.5em 2em !important;
+                        font-size: 1.1rem !important;
+                        box-shadow: 0 2px 8px rgba(37,99,235,0.08) !important;
+                        margin-bottom: 0.5em !important;
+                        transition: background 0.2s;
+                    }
+                    div.stButton > button:hover {
+                        background-color: #1741a6 !important;
+                        color: #fff !important;
+                    }
+                    </style>
+                    """
+                    st.markdown(next_btn_css, unsafe_allow_html=True)
+                    st.button('Next', on_click=lambda: ss.__setitem__('step', 2))
+                def is_numeric_col(col):
+                    if col not in df.columns:
+                        return False
+                    try:
+                        pd.to_numeric(df[col].dropna())
+                        return True
+                    except Exception:
+                        return False
+                valid_features = [col for col in features if col in df.columns]
+                num_cols = [col for col in valid_features if is_numeric_col(col)]
+                summary_cols = list(num_cols)
+                if target and is_numeric_col(target):
+                    if target not in summary_cols:
+                        summary_cols.append(target)
+                if len(summary_cols) > 0:
+                    st.subheader('Column Summaries')
+                    st.dataframe(df[summary_cols].describe().T, use_container_width=True, height=200)
+                    import streamlit.components.v1 as components
+                    import base64
+                    import io as _io
+                    ncols = len(summary_cols)
+                    if ncols == 1:
+                        fig, axes = plt.subplots(1, 1, figsize=(4, 2.5), dpi=120)
+                        axes = [axes]
+                    else:
+                        width = min(max(2.5 * ncols, 6), 18)
+                        fig, axes = plt.subplots(1, ncols, figsize=(width, 2.5), dpi=100)
+                        if ncols == 1:
+                            axes = [axes]
+                    for ax, col in zip(axes, summary_cols):
+                        try:
+                            data = pd.to_numeric(df[col].dropna())
+                        except Exception:
+                            data = df[col].dropna()
+                        ax.hist(data, bins=15, color='#4F8DFD', alpha=0.8)
+                        ax.set_title(col, fontsize=9)
+                        ax.set_xticks([])
+                        ax.set_yticks([])
+                    plt.tight_layout()
+                    buf = _io.BytesIO()
+                    fig.savefig(buf, format="png", bbox_inches="tight")
+                    plt.close(fig)
+                    buf.seek(0)
+                    img_b64 = base64.b64encode(buf.read()).decode()
+                    components.html(f'<div style="overflow-x:auto; width:100%"><img src="data:image/png;base64,{img_b64}" style="min-width:400px; max-width:none;"/></div>', height=260)
+                st.markdown('---')
+                st.subheader('Data Preview')
+                # Always show the full DataFrame in Data Preview
+                full_df = ss['uploaded_df'] if 'uploaded_df' in ss and ss['uploaded_df'] is not None else df
+                gb = GridOptionsBuilder.from_dataframe(full_df)
+                gb.configure_default_column(enablePivot=True, enableValue=True, enableRowGroup=True)
+                gb.configure_side_bar()
+                gb.configure_grid_options(domLayout='normal')
+                grid_options = gb.build()
+                AgGrid(full_df, gridOptions=grid_options, height=600, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
+                st.markdown('---')
+
+    # Removed duplicate selectors and Data Preview logic from col1
+    st.markdown('---')
+
+
+def step2_settings():
+    st.header('2 • Training Settings')
+    ss = st.session_state
+    if ss['uploaded_df'] is None:
+        st.info('Please upload a CSV in Step 1 first.')
+        return
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown('<span style="background: #facc15; color: #1e293b; font-weight: bold; padding: 0.25em 0.7em; border-radius: 6px; font-size: 1.08rem;">Split the Data</span>', unsafe_allow_html=True)
+        split = st.slider('Split the Data (%)', min_value=50, max_value=95, value=70, help='Choose what percent of your data to use for training (the rest is for validation).')
+        ss['settings']['train_frac'] = split / 100.0
+        scale = st.checkbox('Standardize numeric features', value=True)
+        ss['settings']['scale'] = bool(scale)
+        st.write('Algorithm (recommended defaults)')
+        if ss['model_type'] == 'Regression':
+            alg_options = ['Linear Regression', 'Random Forest']
+            prev_alg = ss['settings'].get('algorithm')
+            alg_index = alg_options.index(prev_alg) if prev_alg in alg_options else 0
+            alg = st.selectbox('Algorithm', alg_options, index=alg_index)
+        elif ss['model_type'] == 'Binary classification':
+            alg_options = ['Logistic Regression (Binary)', 'Random Forest']
+            prev_alg = ss['settings'].get('algorithm')
+            alg_index = alg_options.index(prev_alg) if prev_alg in alg_options else 0
+            alg = st.selectbox('Algorithm', alg_options, index=alg_index)
+        else:  # Multi-class classification
+            alg_options = ['Logistic Regression (Multi-class)', 'Random Forest']
+            prev_alg = ss['settings'].get('algorithm')
+            alg_index = alg_options.index(prev_alg) if prev_alg in alg_options else 0
+            alg = st.selectbox('Algorithm', alg_options, index=alg_index)
+        ss['settings']['algorithm'] = alg
+    with col2:
+        st.subheader('Hyperparameters (minimal)')
+        if ss['settings'].get('algorithm', '') == 'Random Forest':
+            n_est = st.number_input('n_estimators', min_value=10, max_value=1000, value=100)
+            max_depth = st.number_input('max_depth (0 = auto)', min_value=0, max_value=100, value=0)
+            ss['settings']['n_estimators'] = int(n_est)
+            ss['settings']['max_depth'] = int(max_depth) if max_depth > 0 else None
+        elif ss['settings'].get('algorithm', '') == 'Logistic Regression':
+            C = st.number_input('C (inverse reg strength)', min_value=0.01, max_value=10.0, value=1.0)
+            penalty = st.selectbox('penalty', ['l2'], index=0)
+            ss['settings']['C'] = float(C)
+            ss['settings']['penalty'] = penalty
+        else:
+            st.write('Default parameters will be used.')
+    st.markdown('---')
+    coln1, coln2 = st.columns([1, 1])
+    with coln1:
+        st.button('Back', on_click=lambda: ss.__setitem__('step', 1))
+    with coln2:
+        train_btn_css = """
+        <style>
+        div.stButton > button {
+            background-color: #2563eb !important;
+            color: #fff !important;
+            font-weight: bold !important;
+            border-radius: 6px !important;
+            border: none !important;
+            padding: 0.5em 2em !important;
+            font-size: 1.1rem !important;
+            box-shadow: 0 2px 8px rgba(37,99,235,0.08) !important;
+            margin-bottom: 0.5em !important;
+            transition: background 0.2s;
+        }
+        div.stButton > button:hover {
+            background-color: #1741a6 !important;
+            color: #fff !important;
+        }
+        </style>
+        """
+        st.markdown(train_btn_css, unsafe_allow_html=True)
+        st.button('Start Training', on_click=start_training)
+
+
+
+
+def start_training():
+    ss = st.session_state
+    ss['training_status'] = 'running'
+    ss['training_logs'] = []
+    ss['metrics'] = None
+    ss['trained_model'] = None
+    ss['model_id'] = None
+    ss['step'] = 3
+    # Kick off training in this request (blocking but shows progress)
+    # Debug: print split sizes after splitting
+    try:
+        df = ss['uploaded_df']
+        features = ss['features']
+        target = ss['target']
+        if df is not None and features is not None and target is not None:
+            X = df[features].copy()
+            y = df[target].copy()
+            mask = X.notna().all(axis=1) & y.notna()
+            X = X[mask]
+            y = y[mask]
+            train_frac = ss['settings'].get('train_frac', 0.8)
+            from sklearn.model_selection import train_test_split
+            X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=train_frac, random_state=42)
+            st.info(f"DEBUG: X_train: {X_train.shape}, X_val: {X_val.shape}, y_train: {y_train.shape}, y_val: {y_val.shape}")
+            if len(y_val) > 0:
+                st.info(f"DEBUG: First 5 y_val: {y_val.head().tolist()}")
+            else:
+                st.warning("DEBUG: y_val is empty after split!")
+    except Exception as e:
+        st.warning(f"DEBUG: Exception during split debug: {e}")
+
+
+def step3_training():
+    st.header('3 • Training Process')
+    ss = st.session_state
+    if ss['training_status'] == 'idle' and ss['uploaded_df'] is None:
+        st.info('No training scheduled. Go to Step 2 and click Start Training.')
+        return
+    progress_placeholder = st.empty()
+    log_placeholder = st.empty()
+    p = progress_placeholder.progress(0)
+    logs = []
+
+    def log(msg):
+        logs.append(msg)
+        log_placeholder.text_area('Logs', value='\n'.join(logs), height=180)
+
+    if ss['training_status'] == 'running':
+        try:
+            df = ss['uploaded_df'].copy()
+            log('Preparing data...')
+            p.progress(5)
+            features = ss['features']
+            target = ss['target']
+            X = df[features].copy()
+            y = df[target].copy()
+            # basic preprocessing: drop rows with NA in selected cols
+            before = len(X)
+            mask = X.notna().all(axis=1) & y.notna()
+            X = X[mask]
+            y = y[mask]
+            after = len(X)
+            log(f'Dropped {before - after} rows with missing values; {after} rows remain.')
+            p.progress(20)
+            # handle categorical encoding: for simplicity, pd.get_dummies for categorical features
+            numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
+            cat_cols = [c for c in X.columns if not pd.api.types.is_numeric_dtype(X[c])]
+            log(f'Numeric cols: {numeric_cols}; Categorical cols: {cat_cols}')
+            if ss['settings'].get('scale', True) and numeric_cols:
+                scaler = StandardScaler()
+                X[numeric_cols] = scaler.fit_transform(X[numeric_cols])
+                ss['settings']['_scaler'] = scaler
+                log('Standardized numeric features.')
+            p.progress(35)
+            # one-hot encode categorical
+            if cat_cols:
+                X = pd.get_dummies(X, columns=cat_cols, drop_first=True)
+                log('One-hot encoded categorical features.')
+            p.progress(50)
+            # split
+            train_frac = ss['settings'].get('train_frac', 0.8)
+            X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=train_frac, random_state=42)
+            log(f'Split data: {len(X_train)} train rows, {len(X_val)} validation rows.')
+            log(f'y_train value counts: {y_train.value_counts().to_dict()}')
+            log(f'y_val value counts: {y_val.value_counts().to_dict()}')
+            log(f'X_train columns: {list(X_train.columns)}')
+            log(f'X_val columns: {list(X_val.columns)}')
+            # Store validation data for plotting
+            ss['_X_val'] = X_val
+            ss['_y_val'] = y_val
+            # persist training feature columns so we can align one-off/batch predictions later
+            ss['training_columns'] = X_train.columns.tolist()
+            log(f'Stored {len(ss["training_columns"])} training feature columns for later alignment.')
+            p.progress(60)
+            # choose model
+            alg = ss['settings'].get('algorithm')
+            model = None
+            if ss['model_type'] == 'Regression':
+                if alg == 'Linear Regression':
+                    model = LinearRegression()
+                    log('Fitting Linear Regression...')
+                else:
+                    model = RandomForestRegressor(n_estimators=ss['settings'].get('n_estimators', 100), max_depth=ss['settings'].get('max_depth', None), random_state=42)
+                    log(f'Fitting RandomForestRegressor (n_estimators={ss["settings"].get("n_estimators", 100)})...')
+            elif ss['model_type'] == 'Binary classification':
+                if alg == 'Logistic Regression (Binary)':
+                    model = LogisticRegression(C=ss['settings'].get('C', 1.0), max_iter=500, solver='lbfgs')
+                    log('Fitting Logistic Regression (Binary)...')
+                else:
+                    model = RandomForestClassifier(n_estimators=ss['settings'].get('n_estimators', 100), max_depth=ss['settings'].get('max_depth', None), random_state=42)
+                    log(f'Fitting RandomForestClassifier (n_estimators={ss["settings"].get("n_estimators", 100)})...')
+            else:  # Multi-class classification
+                if alg == 'Logistic Regression (Multi-class)':
+                    model = LogisticRegression(C=ss['settings'].get('C', 1.0), max_iter=500, solver='lbfgs')
+                    log('Fitting Logistic Regression (Multi-class)...')
+                else:
+                    model = RandomForestClassifier(n_estimators=ss['settings'].get('n_estimators', 100), max_depth=ss['settings'].get('max_depth', None), random_state=42)
+                    log(f'Fitting RandomForestClassifier (n_estimators={ss["settings"].get("n_estimators", 100)})...')
+            p.progress(70)
+            # fit
+            start = time.time()
+            model.fit(X_train, y_train)
+            duration = time.time() - start
+            log(f'Fit completed in {duration:.2f}s.')
+            p.progress(85)
+            # evaluate
+            log('Evaluating on validation set...')
+            y_pred = model.predict(X_val)
+            log(f'y_pred unique values: {np.unique(y_pred)}')
+            metrics = {}
+            if ss['model_type'] == 'Regression':
+                metrics['MAE'] = float(mean_absolute_error(y_val, y_pred))
+                metrics['MSE'] = float(mean_squared_error(y_val, y_pred))
+                metrics['R2'] = float(r2_score(y_val, y_pred))
+                ss['metrics'] = metrics
+            else:
+                # for classification, if probabilities available
+                if hasattr(model, 'predict_proba'):
+                    y_proba = model.predict_proba(X_val)
+                else:
+                    y_proba = None
+                metrics['accuracy'] = float(accuracy_score(y_val, y_pred))
+                metrics['precision'] = float(precision_score(y_val, y_pred, average='macro', zero_division=0))
+                metrics['recall'] = float(recall_score(y_val, y_pred, average='macro', zero_division=0))
+                metrics['f1'] = float(f1_score(y_val, y_pred, average='macro', zero_division=0))
+                ss['metrics'] = metrics
+                ss['_y_val'] = y_val
+                ss['_y_proba'] = y_proba
+            p.progress(95)
+            # store model and artifacts (in-session)
+            ss['trained_model'] = model
+            ss['training_status'] = 'done'
+            # feature importances if applicable
+            try:
+                if hasattr(model, 'feature_importances_'):
+                    ss['feature_importances'] = dict(zip(X_train.columns.tolist(), model.feature_importances_.tolist()))
+                elif hasattr(model, 'coef_'):
+                    coefs = model.coef_.tolist()
+                    # handle multiclass
+                    ss['coefficients'] = coefs
+            except Exception:
+                pass
+            p.progress(100)
+            log('Training complete.')
+            ss['training_logs'] = logs
+            ss['step'] = 4
+        except Exception as e:
+            ss['training_status'] = 'error'
+            st.error(readable_exception(e))
+            log(f'Error during training: {str(e)}')
+    else:
+        st.info('No training in progress. Start training from Step 2.')
+    st.markdown('---')
+    if ss.get('training_logs'):
+        st.text_area('Logs', value='\n'.join(ss['training_logs']), height=200)
+    if ss.get('training_status') == 'done':
+        st.success('Training finished — go to Step 4 to see results.')
+
+
+def step4_results():
+    st.header('4 • Training Results')
+    ss = st.session_state
+    if ss.get('trained_model') is None:
+        st.info('No trained model available. Complete Step 3 first.')
+        return
+    model = ss['trained_model']
+    metrics = ss.get('metrics', {})
+    # --- Modern card-style metrics layout ---
+    st.markdown('<div style="font-weight:600;font-size:1.1rem;margin-bottom:0.7rem;">Model Performance</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+    .metric-square {
+        background: #fff;
+        border-radius: 10px;
+        border: 1.5px solid #e5e7eb;
+        box-shadow: 0 1px 4px rgba(37,99,235,0.06);
+        min-width: 120px;
+        min-height: 110px;
+        max-width: 160px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+        padding: 0.7rem 0.5rem 0.7rem 0.5rem;
+    }
+    .metric-square .label {
+        color: #64748b;
+        font-size: 0.93rem;
+        font-weight: 500;
+        margin-bottom: 0.2rem;
+        text-align: center;
+        letter-spacing: 0.01em;
+    }
+    .metric-square .value {
+        color: #2563eb;
+        font-size: 1.35rem;
+        font-weight: 700;
+        text-align: center;
+        letter-spacing: 0.01em;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    if ss['model_type'] == 'Regression':
+        cols = st.columns(7)
+        with cols[0]:
+            st.markdown('<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">regression</div></div>', unsafe_allow_html=True)
+        with cols[1]:
+            st.markdown(f'<div class="metric-square"><div class="label">TRAINING SAMPLES</div><div class="value">{len(ss["uploaded_df"])} </div></div>', unsafe_allow_html=True)
+        with cols[2]:
+            st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(ss["features"])} </div></div>', unsafe_allow_html=True)
+        with cols[3]:
+            st.markdown(f'<div class="metric-square"><div class="label">MEAN ABSOLUTE ERROR</div><div class="value">{metrics.get("MAE"):.3f}</div></div>', unsafe_allow_html=True)
+        with cols[4]:
+            st.markdown(f'<div class="metric-square"><div class="label">MEAN SQUARED ERROR</div><div class="value">{metrics.get("MSE"):.3f}</div></div>', unsafe_allow_html=True)
+        with cols[5]:
+            st.markdown(f'<div class="metric-square"><div class="label">ROOT MEAN SQUARED ERROR</div><div class="value">{metrics.get("MSE")**0.5:.3f}</div></div>', unsafe_allow_html=True)
+        with cols[6]:
+            st.markdown(f'<div class="metric-square"><div class="label">R² SCORE</div><div class="value">{metrics.get("R2"):.3f}</div></div>', unsafe_allow_html=True)
+    else:
+        cols = st.columns(7)
+        with cols[0]:
+            st.markdown('<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">classification</div></div>', unsafe_allow_html=True)
+        with cols[1]:
+            st.markdown(f'<div class="metric-square"><div class="label">TRAINING SAMPLES</div><div class="value">{len(ss["uploaded_df"])} </div></div>', unsafe_allow_html=True)
+        with cols[2]:
+            st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(ss["features"])} </div></div>', unsafe_allow_html=True)
+        with cols[3]:
+            st.markdown(f'<div class="metric-square"><div class="label">ACCURACY</div><div class="value">{metrics.get("accuracy"):.3f}</div></div>', unsafe_allow_html=True)
+        with cols[4]:
+            st.markdown(f'<div class="metric-square"><div class="label">PRECISION (MACRO)</div><div class="value">{metrics.get("precision"):.3f}</div></div>', unsafe_allow_html=True)
+        with cols[5]:
+            st.markdown(f'<div class="metric-square"><div class="label">RECALL (MACRO)</div><div class="value">{metrics.get("recall"):.3f}</div></div>', unsafe_allow_html=True)
+        with cols[6]:
+            st.markdown(f'<div class="metric-square"><div class="label">F1 (MACRO)</div><div class="value">{metrics.get("f1"):.3f}</div></div>', unsafe_allow_html=True)
+
+    # --- Keep the rest of the visuals and plots as before ---
+    if ss['model_type'] == 'Regression':
+        df = ss['uploaded_df']
+        features = ss['features']
+        target = ss['target']
+        if ss.get('_y_val') is not None and ss.get('_X_val') is not None:
+            y_val = ss['_y_val']
+            X_val = ss['_X_val']
+            try:
+                y_pred = ss['trained_model'].predict(X_val)
+                # Display both plots side by side
+                plot_cols = st.columns(2)
+                with plot_cols[0]:
+                    import io
+                    fig, ax = plt.subplots(figsize=(4, 3), dpi=180)
+                    ax.scatter(
+                        range(len(y_val)), y_val - y_pred,
+                        alpha=0.9, s=32,
+                        facecolors='none', edgecolors='#2563eb', linewidths=1.5
+                    )
+                    ax.axhline(0, color='k', linewidth=1.2)
+                    ax.set_title('Residuals', fontsize=18)
+                    ax.set_xlabel('Sample Index', fontsize=14)
+                    ax.set_ylabel('Residual (y_true - y_pred)', fontsize=14)
+                    ax.tick_params(axis='both', labelsize=12)
+                    fig.tight_layout(pad=0.2)
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format="svg", bbox_inches="tight")
+                    plt.close(fig)
+                    svg = buf.getvalue().decode("utf-8")
+                    st.markdown(f"""<div style='width:100%;text-align:center'>{svg}</div>""", unsafe_allow_html=True)
+                with plot_cols[1]:
+                    import io
+                    fig2, ax2 = plt.subplots(figsize=(4, 3), dpi=180)
+                    ax2.scatter(
+                        y_val, y_pred,
+                        alpha=0.9, s=32,
+                        facecolors='none', edgecolors='#2563eb', linewidths=1.5
+                    )
+                    ax2.plot([y_val.min(), y_val.max()], [y_val.min(), y_val.max()], 'r--', lw=2.0)
+                    ax2.set_title('True vs Predicted', fontsize=18)
+                    ax2.set_xlabel('True Values', fontsize=14)
+                    ax2.set_ylabel('Predicted Values', fontsize=14)
+                    ax2.tick_params(axis='both', labelsize=12)
+                    fig2.tight_layout(pad=0.2)
+                    buf2 = io.BytesIO()
+                    fig2.savefig(buf2, format="svg", bbox_inches="tight")
+                    plt.close(fig2)
+                    svg2 = buf2.getvalue().decode("utf-8")
+                    st.markdown(f"""<div style='width:100%;text-align:center'>{svg2}</div>""", unsafe_allow_html=True)
+            except Exception as e:
+                st.warning(f"Could not plot regression charts: {e}")
+        else:
+            st.info("No validation data available for plotting charts. If you see this message and have enough data, please report it.")
+    else:
+        # Visuals for classification
+        if ss.get('_y_val') is not None:
+            y_val = ss['_y_val']
+            # Use the same X_val as in validation
+            X_val = ss.get('_X_val')
+            if X_val is not None:
+                y_pred = ss['trained_model'].predict(X_val)
+            else:
+                y_pred = ss['trained_model'].predict(pd.get_dummies(ss['uploaded_df'][ss['features']].dropna(), drop_first=True))[:len(y_val)]
+            # Confusion matrix
+            from sklearn.metrics import ConfusionMatrixDisplay
+            # Show confusion matrix and ROC curve side by side for binary classification
+            if hasattr(ss['trained_model'], 'predict_proba') and ss.get('_y_proba') is not None and len(set(y_val)) == 2:
+                y_proba = ss['_y_proba']
+                fpr, tpr, _ = roc_curve(y_val, y_proba[:, 1])
+                roc_auc = auc(fpr, tpr)
+                plot_cols = st.columns(2)
+                with plot_cols[0]:
+                    import io
+                    fig, ax = plt.subplots(figsize=(4, 3), dpi=180)
+                    disp = ConfusionMatrixDisplay.from_predictions(
+                        y_val, y_pred,
+                        cmap=plt.cm.Blues,
+                        ax=ax,
+                        colorbar=True
+                    )
+                    ax.set_title('Confusion Matrix', fontsize=18)
+                    ax.set_xlabel('Predicted label', fontsize=14)
+                    ax.set_ylabel('True label', fontsize=14)
+                    ax.tick_params(axis='both', labelsize=12)
+                    fig.tight_layout(pad=0.2)
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format="svg", bbox_inches="tight")
+                    plt.close(fig)
+                    svg = buf.getvalue().decode("utf-8")
+                    st.markdown(f"""<div style='width:100%;text-align:center'>{svg}</div>""", unsafe_allow_html=True)
+                with plot_cols[1]:
+                    import io
+                    fig2, ax2 = plt.subplots(figsize=(4, 3), dpi=180)
+                    ax2.plot(fpr, tpr, color='darkorange', lw=2.5, label=f'ROC curve (area = {roc_auc:.2f})')
+                    ax2.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+                    ax2.set_xlim([0.0, 1.0])
+                    ax2.set_ylim([0.0, 1.05])
+                    ax2.set_xlabel('False Positive Rate', fontsize=14)
+                    ax2.set_ylabel('True Positive Rate', fontsize=14)
+                    ax2.set_title('ROC Curve', fontsize=18)
+                    ax2.legend(loc='lower right', fontsize=12, frameon=True)
+                    ax2.tick_params(axis='both', labelsize=12)
+                    fig2.tight_layout(pad=0.2)
+                    buf2 = io.BytesIO()
+                    fig2.savefig(buf2, format="svg", bbox_inches="tight")
+                    plt.close(fig2)
+                    svg2 = buf2.getvalue().decode("utf-8")
+                    st.markdown(f"""<div style='width:100%;text-align:center'>{svg2}</div>""", unsafe_allow_html=True)
+            else:
+                # Only one confusion matrix for multi-class, compact and clear
+                if ss.get('model_type') == 'Multi-class classification':
+                    # Try to use class names if available
+                    class_labels = None
+                    if hasattr(ss['trained_model'], 'classes_'):
+                        class_labels = ss['trained_model'].classes_
+                    import io
+                    fig, ax = plt.subplots(figsize=(3, 2.5), dpi=150)
+                    disp = ConfusionMatrixDisplay.from_predictions(
+                        y_val, y_pred,
+                        display_labels=class_labels,
+                        cmap=plt.cm.Blues,
+                        ax=ax,
+                        colorbar=True,
+                        values_format='.2g'
+                    )
+                    ax.set_title('Confusion Matrix', fontsize=9, pad=5)
+                    ax.set_xlabel('Predicted label', fontsize=8, labelpad=4)
+                    ax.set_ylabel('True label', fontsize=8, labelpad=4)
+                    ax.tick_params(axis='both', labelsize=7, length=2)
+                    cb = ax.figure.axes[-1]
+                    cb.tick_params(labelsize=7, length=2)
+                    fig.tight_layout(pad=0.5)
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format='png', bbox_inches='tight')
+                    plt.close(fig)
+                    buf.seek(0)
+                    st.image(buf)
+                else:
+                    fig, ax = plt.subplots(figsize=(3, 2.5), dpi=150)
+                    disp = ConfusionMatrixDisplay.from_predictions(
+                        y_val, y_pred,
+                        cmap=plt.cm.Blues,
+                        ax=ax,
+                        colorbar=True
+                    )
+                    ax.set_title('Confusion Matrix', fontsize=12)
+                    ax.set_xlabel('Predicted label', fontsize=10)
+                    ax.set_ylabel('True label', fontsize=10)
+                    ax.tick_params(axis='both', labelsize=9)
+                    fig.tight_layout()
+                    st.pyplot(fig)
+    # Removed Model artifacts and download buttons as requested
+
+
+def step5_test():
+    st.header('5 • Test Model')
+    ss = st.session_state
+    if ss.get('trained_model') is None:
+        st.info('No trained model available.')
+        return
+    model = ss['trained_model']
+    st.subheader('Single prediction')
+    features = ss['features']
+    if not features:
+        st.info('No features selected.')
+        return
+    # generate simple inputs
+    input_vals = {}
+    cols = st.columns(2)
+    for i, f in enumerate(features):
+        dtype = ss['uploaded_df'][f].dtype
+        if pd.api.types.is_numeric_dtype(dtype):
+            input_vals[f] = cols[i % 2].number_input(f, value=float(ss['uploaded_df'][f].dropna().median()))
+        else:
+            opts = ss['uploaded_df'][f].dropna().unique().tolist()
+            input_vals[f] = cols[i % 2].selectbox(f, options=opts)
+    if st.button('Predict'):
+        try:
+            X = pd.DataFrame([input_vals])
+            # apply scaling and dummies consistent with training
+            if ss['settings'].get('scale', True):
+                scaler = ss['settings'].get('_scaler')
+                if scaler is not None:
+                    num_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
+                    if num_cols:
+                        X[num_cols] = scaler.transform(X[num_cols])
+            # align dummies with training
+            X = pd.get_dummies(X, columns=[c for c in X.columns if not pd.api.types.is_numeric_dtype(X[c].dtype)], drop_first=True)
+            # Reindex to the training columns saved during training. Fill missing columns with 0.
+            trained_cols = ss.get('training_columns')
+            if trained_cols is not None:
+                X = X.reindex(columns=trained_cols, fill_value=0)
+            pred = model.predict(X)
+            if hasattr(model, 'predict_proba'):
+                proba = model.predict_proba(X)
+            else:
+                proba = None
+            st.success(f'Prediction: {pred[0]}')
+            if proba is not None:
+                st.write('Confidence / probabilities:')
+                st.write(proba[0].tolist())
+        except Exception as e:
+            st.error(readable_exception(e))
+    st.markdown('---')
+    st.subheader('Batch predictions')
+    batch_file = st.file_uploader('Upload CSV for batch predictions', type=['csv'])
+    if batch_file is not None:
+        try:
+            bdf = pd.read_csv(batch_file)
+            Xb = bdf[features]
+            # basic processing
+            if ss['settings'].get('scale', True):
+                scaler = ss['settings'].get('_scaler')
+                num_cols = [c for c in Xb.columns if pd.api.types.is_numeric_dtype(Xb[c])]
+                if scaler and num_cols:
+                    Xb[num_cols] = scaler.transform(Xb[num_cols])
+            Xb = pd.get_dummies(Xb, drop_first=True)
+            # align columns with training columns if available
+            trained_cols = ss.get('training_columns')
+            if trained_cols is not None:
+                Xb = Xb.reindex(columns=trained_cols, fill_value=0)
+            preds = ss['trained_model'].predict(Xb)
+            bdf['prediction'] = preds
+            st.dataframe(bdf.head(20))
+            csv_bytes = bdf.to_csv(index=False).encode('utf-8')
+            st.download_button('Download predictions CSV', data=csv_bytes, file_name='predictions.csv')
+        except Exception as e:
+            st.error(readable_exception(e))
+
+
+
+
+def main():
+
+    init_state()
+    ss = st.session_state
+
+    # Only call the step functions and keep the bottom section
+
+    # Inject a small JS snippet that hides floating sidebar hover controls which
+    # sometimes appear as a blue rounded box. This uses heuristics on computed
+    # styles (fixed/absolute position + gradient background) and a MutationObserver
+    # so newly-created controls are removed immediately.
+    st.components.v1.html(
+        """
+        <script>
+        (function(){
+            function hideBlueControls(){
+                        try{
+                            var nodes = Array.from(document.querySelectorAll('body *'));
+                            nodes.forEach(function(el){
+                                try{
+                                    var cs = window.getComputedStyle(el);
+                                    if((cs.position === 'fixed' || cs.position === 'absolute') && cs.backgroundImage && cs.backgroundImage.indexOf('gradient') !== -1){
+                                        var w = el.offsetWidth || 0;
+                                        var h = el.offsetHeight || 0;
+                                        if(w > 16 && w < 260 && h > 16 && h < 160){
+                                            el.style.setProperty('display','none','important');
+                                            el.style.setProperty('visibility','hidden','important');
+                                            el.style.setProperty('pointer-events','none','important');
+                                            el.dataset.mllite_hidden = '1';
+                                        }
+                                    }
+                                }catch(e){}
+                            });
+                        }catch(e){}
+                    }
+                    var obs = new MutationObserver(hideBlueControls);
+                    obs.observe(document.body, { childList: true, subtree: true, attributes: true });
+                    document.addEventListener('mousemove', hideBlueControls, true);
+                    setTimeout(hideBlueControls, 250);
+                    setInterval(hideBlueControls, 2000);
+                })();
+                </script>
+                """,
+                height=0,
+        )
+    sidebar_steps()
+    show_help_slider()  # Show the floating help slider
+    step = st.session_state['step']
+    if step == 1:
+        step1_model_and_data()
+    elif step == 2:
+        step2_settings()
+    elif step == 3:
+        step3_training()
+    elif step == 4:
+        step4_results()
+    elif step == 5:
+        step5_test()
+    elif step == 'cv':
+        computer_vision_ui()
+
+
+if __name__ == '__main__':
+    main()
