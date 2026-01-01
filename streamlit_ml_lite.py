@@ -130,7 +130,7 @@ def _run_with_streamlit_if_needed():
     try:
         # If we're running under streamlit's runtime, get_script_run_ctx() will
         # return a context object. In that case, just execute main().
-        from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
+        from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
         ctx = get_script_run_ctx()
     except Exception:
         ctx = None
@@ -166,7 +166,7 @@ def _run_with_streamlit_if_needed():
         try:
             # If we're running under streamlit's runtime, get_script_run_ctx() will
             # return a context object. In that case, just execute main().
-            from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
+            from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
             ctx = get_script_run_ctx()
         except Exception:
             ctx = None
