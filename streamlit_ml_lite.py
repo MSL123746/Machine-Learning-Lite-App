@@ -218,99 +218,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 
-def show_help_slider():
-    ss = st.session_state
-    help_content = {
-        1: {
-            'title': 'Help: Model & Data',
-            'body': 'Upload your CSV file and select the target and features.\n\n[Sample Data](https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv)\n\n[Watch: Data Upload Tutorial](https://www.youtube.com/watch?v=R2nr1uZ8ffc)'
-        },
-        2: {
-            'title': 'Help: Settings',
-            'body': 'Adjust training settings and algorithm options. [More Info](https://scikit-learn.org/stable/supervised_learning.html)'
-        },
-        3: {
-            'title': 'Help: Training',
-            'body': 'Start training and monitor logs. [Model Training Guide](https://www.youtube.com/watch?v=0Lt9w-BxKFQ)'
-        },
-        4: {
-            'title': 'Help: Results',
-            'body': 'Review metrics and download your model. [Understanding Metrics](https://scikit-learn.org/stable/modules/model_evaluation.html)'
-        },
-        5: {
-            'title': 'Help: Test',
-            'body': 'Test your model with new data. [Batch Prediction Demo](https://www.youtube.com/watch?v=GJoX9F-1Jb0)'
-        },
-    }
-    step = ss.get('step', 1)
-    if 'help_slider_open' not in ss:
-        ss['help_slider_open'] = False
-    st.markdown('''
-        <style>
-        #help-fab {{
-            position: fixed;
-            top: 40px;
-            right: 32px;
-            z-index: 9999;
-            background: #2563eb;
-            color: #fff;
-            border-radius: 50%;
-            width: 48px;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            box-shadow: 0 4px 16px rgba(37,99,235,0.18);
-            border: none;
-            cursor: pointer;
-            transition: background 0.2s;
-        }}
-        #help-fab:hover {{ background: #0ea5e9; }}
-        #help-slider {{
-            position: fixed;
-            top: 0;
-            right: 0;
-            width: 370px;
-            height: 100vh;
-            background: #f8fafc;
-            box-shadow: -2px 0 16px rgba(37,99,235,0.10);
-            z-index: 9998;
-            padding: 48px 28px 24px 28px;
-            /* Added extra top padding to push text down */
-            transform: translateX({});
-            transition: transform 0.3s cubic-bezier(.4,0,.2,1);
-            overflow-y: auto;
-        }}
-        #help-slider h3 {{ margin-top: 0; color: #2563eb; }}
-        #help-slider .close-btn {{
-            position: absolute;
-            top: 18px;
-            right: 18px;
-            background: none;
-            border: none;
-            font-size: 22px;
-            color: #64748b;
-            cursor: pointer;
-        }}
-        </style>
-    '''.format('0' if ss['help_slider_open'] else '100%'), unsafe_allow_html=True)
-    if not ss['help_slider_open']:
-        if st.button('Click Me for Help', key='help_fab', help='Show help panel', use_container_width=False):
-            ss['help_slider_open'] = True
-            st.rerun()
-    if ss['help_slider_open']:
-        content = help_content.get(step, {'title': 'Help', 'body': 'No help available.'})
-        st.markdown(f'''
-            <div id="help-slider">
-                <button class="close-btn" onclick="window.dispatchEvent(new CustomEvent('help-slider-close'))">×</button>
-                <h3>{content['title']}</h3>
-                <div style="font-size:1.05rem;line-height:1.6;">{content['body']}</div>
-            </div>
-        ''', unsafe_allow_html=True)
-        if st.button('Close Help', key='close_help', use_container_width=False):
-            ss['help_slider_open'] = False
-            st.rerun()
 
 st.set_page_config(page_title='Machine Learning Lite', layout='wide')
 import sklearn
@@ -321,7 +228,7 @@ def main():
     st.title('Machine Learning Lite')
     # ...existing code...
     sidebar_steps()
-    show_help_slider()  # <-- Add this line here
+    # Help slider removed
     # ...existing code...
 
 def _inject_stepper_css():
@@ -456,182 +363,8 @@ def sidebar_steps():
             )
     st.sidebar.markdown("---")
     st.sidebar.success('ML App Ready for Use!')
-    st.sidebar.markdown("<div style='height:32px;'></div>", unsafe_allow_html=True)
-    # Computer Vision button below the success message, using Streamlit's button for state change
-    cv_selected = (ss.get('step', 1) == 'cv')
-    cv_style = "background: #ffe5b4; border: 2px solid #ff9800; border-radius: 10px; padding: 0.7rem 1rem; font-weight: 600; font-size: 1.05rem; color: #b45309; display: flex; align-items: center; min-height: 48px; justify-content: center; margin-bottom: 0.7rem; width: 100%; box-sizing: border-box;"
-    if cv_selected:
-        cv_style += " box-shadow: 0 4px 18px rgba(255,152,0,0.13);"
-    if st.sidebar.button('CV: Computer Vision', key='cv_btn_sidebar', help='Go to Computer Vision section', use_container_width=True):
-        ss['step'] = 'cv'
-        st.rerun()
-
-def computer_vision_ui():
-    # Inject modern UI CSS for soft, rounded, minimal look
-    st.markdown("""
-        <style>
-        /* Hide uploaded file list in file_uploader for all Streamlit versions */
-        div[data-testid="stFileUploader"] ul,
-        div[data-testid="stFileUploader"] .uploadedFile,
-        div[data-testid="stFileUploader"] .st-emotion-cache-1m3b9l5,
-        div[data-testid="stFileUploader"] .st-emotion-cache-1c7y2kd {
-            display: none !important;
-        }
-
-        /* Modern card look for containers */
-        section.main > div {
-            background: #fff;
-            border-radius: 18px;
-            box-shadow: 0 2px 16px rgba(37,99,235,0.07);
-            padding: 2.2rem 2.5rem 2.5rem 2.5rem;
-            margin-top: 1.2rem;
-        }
-        /* Sidebar styling */
-        [data-testid="stSidebar"] {
-            background: #f8fafc !important;
-            border-radius: 18px 0 0 18px;
-            box-shadow: 2px 0 16px rgba(37,99,235,0.07);
-        }
-        /* Sidebar button highlight */
-        .mllite-stepper-btn.selected, .st-emotion-cache-1v0mbdj {
-            background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
-            color: #fff !important;
-            border: 1.5px solid #2563eb !important;
-            border-left: 5px solid #2563eb !important;
-            box-shadow: 0 4px 18px rgba(37,99,235,0.13) !important;
-        }
-        /* Sidebar button normal */
-        .mllite-stepper-btn {
-            border-radius: 10px !important;
-            background: #fff !important;
-            color: #1e293b !important;
-            border: 1.5px solid #e5e7eb !important;
-            box-shadow: 0 1px 6px rgba(37,99,235,0.07) !important;
-        }
-        /* File uploader styling */
-        div[data-testid="stFileUploader"] > div:first-child {
-            border-radius: 12px !important;
-            background: #f1f5f9 !important;
-            border: 1.5px solid #e5e7eb !important;
-            box-shadow: 0 1px 6px rgba(37,99,235,0.07) !important;
-        }
-        /* Buttons */
-        button, div.stButton > button {
-            border-radius: 10px !important;
-            background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
-            color: #fff !important;
-            font-weight: 600 !important;
-            font-size: 1.08rem !important;
-            box-shadow: 0 2px 8px rgba(37,99,235,0.10) !important;
-            border: none !important;
-            padding: 0.6em 2.2em !important;
-            margin-bottom: 0.5em !important;
-            transition: background 0.2s;
-        }
-        button:hover, div.stButton > button:hover {
-            background: #1741a6 !important;
-            color: #fff !important;
-        }
-        /* Headings */
-        h1, h2, h3, h4, h5, h6 {
-            font-family: 'Segoe UI', 'Inter', Arial, sans-serif !important;
-            font-weight: 700 !important;
-            letter-spacing: 0.01em;
-        }
-        /* General font */
-        html, body, .stApp {
-            font-family: 'Segoe UI', 'Inter', Arial, sans-serif !important;
-            color: #1e293b !important;
-        }
-        /* Remove default Streamlit top padding */
-        .block-container {
-            padding-top: 1.2rem !important;
-        }
-        /* Help button style */
-        #help-fab {
-            background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
-            color: #fff !important;
-            border-radius: 50% !important;
-            box-shadow: 0 4px 16px rgba(37,99,235,0.18) !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-    import cv2
-    from PIL import Image
-    st.header('Computer Vision')
-    st.write('Upload one or more images to analyze or train a model.')
-    uploaded_files = st.file_uploader('Upload Image(s)', type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
-    if uploaded_files:
-        if 'process_images' not in st.session_state:
-            st.session_state['process_images'] = False
-        st.info(f'{len(uploaded_files)} image(s) uploaded.')
-        process = st.button('Process All Images', key='process_all_btn')
-        if process:
-            st.session_state['process_images'] = True
-            st.session_state['test_image_uploaded'] = False  # Reset test image state on new processing
-        # Only show results and test uploader after processing
-        if st.session_state['process_images']:
-            st.subheader('Processing Results')
-            num_files = len(uploaded_files)
-            for uploaded_file in uploaded_files:
-                image = Image.open(uploaded_file)
-                img_array = np.array(image)
-                gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-            st.success(f'{num_files} image(s) processed!')
-            st.markdown('---')
-            st.subheader('Model Performance Metrics (Example)')
-            st.write('Accuracy: 0.95')
-            st.write('Precision: 0.93')
-            st.write('Recall: 0.92')
-            st.write('F1 Score: 0.925')
-            st.markdown('---')
-            # Only show test uploader if a test image has not been uploaded yet
-            if not st.session_state.get('test_image_uploaded', False):
-                st.subheader('Test Model with New Image')
-                test_file = st.file_uploader(
-                    'Upload a test image to compare to the trained model',
-                    type=['png', 'jpg', 'jpeg'],
-                    key='test_image_upload_after_processing'
-                )
-                if test_file is not None:
-                    # Store file in session state and immediately run prediction
-                    st.session_state['test_image_uploaded'] = True
-                    st.session_state['test_image_file_name'] = test_file.name
-                    st.session_state['test_image_obj'] = test_file
-                    # Run prediction logic
-                    test_image = Image.open(test_file)
-                    test_img_array = np.array(test_image)
-                    test_gray = cv2.cvtColor(test_img_array, cv2.COLOR_RGB2GRAY)
-                    import pickle
-                    import os
-                    model_path = 'model.pkl'
-                    if os.path.exists(model_path):
-                        with open(model_path, 'rb') as f:
-                            model = pickle.load(f)
-                    else:
-                        from sklearn.dummy import DummyClassifier
-                        model = DummyClassifier(strategy='uniform')
-                        X_fake = np.random.rand(10, test_gray.size)
-                        y_fake = np.random.randint(0, 2, 10)
-                        model.fit(X_fake, y_fake)
-                        with open(model_path, 'wb') as f:
-                            pickle.dump(model, f)
-                    test_feature = [test_gray.flatten()]
-                    pred = model.predict(test_feature)[0]
-                    st.session_state['test_image_prediction'] = pred
-                    st.rerun()
-            else:
-                # Only show result and button to test another image
-                pred = st.session_state.get('test_image_prediction', None)
-                file_name = st.session_state.get('test_image_file_name', '')
-                if pred is not None:
-                    st.success(f'Test image {file_name} processed! Model prediction: {pred}')
-                if st.button('Test Another Image'):
-                    st.session_state['test_image_uploaded'] = False
-                    st.session_state['test_image_prediction'] = None
-                    st.session_state['test_image_file_name'] = ''
-                    st.session_state['test_image_obj'] = None
-                    st.rerun()
+    # Computer Vision button and related code removed
+    # All computer vision, DummyClassifier, and test_gray code removed
 
 def step1_model_and_data():
     st.header('Stage 1: Data')
@@ -1314,31 +1047,7 @@ def step5_test():
                 st.write(proba[0].tolist())
         except Exception as e:
             st.error(readable_exception(e))
-    st.markdown('---')
-    st.subheader('Batch predictions')
-    batch_file = st.file_uploader('Upload CSV for batch predictions', type=['csv'])
-    if batch_file is not None:
-        try:
-            bdf = pd.read_csv(batch_file)
-            Xb = bdf[features]
-            # basic processing
-            if ss['settings'].get('scale', True):
-                scaler = ss['settings'].get('_scaler')
-                num_cols = [c for c in Xb.columns if pd.api.types.is_numeric_dtype(Xb[c])]
-                if scaler and num_cols:
-                    Xb[num_cols] = scaler.transform(Xb[num_cols])
-            Xb = pd.get_dummies(Xb, drop_first=True)
-            # align columns with training columns if available
-            trained_cols = ss.get('training_columns')
-            if trained_cols is not None:
-                Xb = Xb.reindex(columns=trained_cols, fill_value=0)
-            preds = ss['trained_model'].predict(Xb)
-            bdf['prediction'] = preds
-            st.dataframe(bdf.head(20))
-            csv_bytes = bdf.to_csv(index=False).encode('utf-8')
-            st.download_button('Download predictions CSV', data=csv_bytes, file_name='predictions.csv')
-        except Exception as e:
-            st.error(readable_exception(e))
+    # Batch predictions feature removed
 
 
 
@@ -1389,7 +1098,7 @@ def main():
                 height=0,
         )
     sidebar_steps()
-    show_help_slider()  # Show the floating help slider
+    # Help slider removed
     step = st.session_state['step']
     if step == 1:
         step1_model_and_data()
@@ -1401,8 +1110,7 @@ def main():
         step4_results()
     elif step == 5:
         step5_test()
-    elif step == 'cv':
-        computer_vision_ui()
+    # CV step and computer_vision_ui removed
 
 
 if __name__ == '__main__':
