@@ -1,5 +1,5 @@
 import streamlit as st
-# NO CHANGES - Inject modern UI CSS for soft, rounded, minimal look (apply globally, very top)
+# Added Clustering - Inject modern UI CSS for soft, rounded, minimal look (apply globally, very top)
 st.markdown("""
     <style>
     /* Hide uploaded file list in file_uploader for all Streamlit versions */
@@ -330,13 +330,22 @@ def sidebar_steps():
     # Inject CSS for prettier sidebar buttons
     _inject_stepper_css()
     ss = st.session_state
-    steps = [
-        ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
-        ('Stage 2', 'Settings', 'Select train fraction and algorithm settings.'),
-        ('Stage 3', 'Training', 'Start training and view logs/progress.'),
-        ('Stage 4', 'Results', 'Inspect metrics and download model.'),
-        ('Stage 5', 'Test', 'Make single or batch predictions.'),
-    ]
+    ss = st.session_state
+    if ss.get('model_type') == 'Clustering':
+        steps = [
+            ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
+            ('Stage 2', 'Settings', 'Select train fraction and algorithm settings.'),
+            ('Stage 3', 'Training', 'Start training and view logs/progress.'),
+            ('Stage 4', 'Results', 'Inspect metrics and download model.'),
+        ]
+    else:
+        steps = [
+            ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
+            ('Stage 2', 'Settings', 'Select train fraction and algorithm settings.'),
+            ('Stage 3', 'Training', 'Start training and view logs/progress.'),
+            ('Stage 4', 'Results', 'Inspect metrics and download model.'),
+            ('Stage 5', 'Test', 'Make single or batch predictions.'),
+        ]
 
     def set_step(idx):
         ss['step'] = idx + 1
@@ -371,7 +380,7 @@ def step1_model_and_data():
     ss = st.session_state
     col1, col2 = st.columns([2, 5])
     with col1:
-        model_types = ['Regression', 'Binary classification', 'Multi-class classification']
+        model_types = ['Regression', 'Binary classification', 'Multi-class classification', 'Clustering']
         mt = st.selectbox('Model Type', model_types, index=model_types.index(ss.get('model_type', 'Regression')))
         ss['model_type'] = mt
         st.markdown('Upload a CSV file (max 10 MB). The app will infer a simple schema.')
@@ -409,48 +418,75 @@ def step1_model_and_data():
                         or str(col) == '::auto_unique_id::'
                     )
                 cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_feature_select(c)]
-                def is_valid_target_select(col):
-                    return not (
-                        str(col).lower().startswith('auto_')
-                        or str(col).lower().endswith('unique-id')
-                        or str(col).lower().endswith('index')
-                        or str(col) == '::auto_unique_id::'
-                    )
-                target_cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_target_select(c)]
-                # Use stable keys for widgets so Streamlit tracks their values
-                target = st.selectbox('Select target column', options=["Select a target..."] + target_cols, index=0, key='target_select')
-                features = st.multiselect('Select feature columns (leave blank to use all except target)', options=cols, default=[], key='feature_select')
-                # Only set target if the user has made a selection (not just defaulted to the first option)
-                selected_target = st.session_state.get('target_select')
-                if selected_target is not None and selected_target != "Select a target..." and str(selected_target).strip() != '':
-                    ss['target'] = selected_target
-                else:
+                if ss['model_type'] == 'Clustering':
+                    features = st.multiselect('Select feature columns (leave blank to use all)', options=cols, default=[], key='feature_select')
+                    ss['features'] = features
                     ss['target'] = None
-                ss['features'] = features
-                # Show Next button only if dataset, features, and a real user-selected target (not placeholder) are present
-                if ss['uploaded_df'] is not None and features and ss['target'] is not None and ss['target'] != "Select a target..." and str(ss['target']).strip() != '':
-                    next_btn_css = """
-                    <style>
-                    div.stButton > button {
-                        background-color: #2563eb !important;
-                        color: #fff !important;
-                        font-weight: bold !important;
-                        border-radius: 6px !important;
-                        border: none !important;
-                        padding: 0.5em 2em !important;
-                        font-size: 1.1rem !important;
-                        box-shadow: 0 2px 8px rgba(37,99,235,0.08) !important;
-                        margin-bottom: 0.5em !important;
-                        transition: background 0.2s;
-                    }
-                    div.stButton > button:hover {
-                        background-color: #1741a6 !important;
-                        color: #fff !important;
-                    }
-                    </style>
-                    """
-                    st.markdown(next_btn_css, unsafe_allow_html=True)
-                    st.button('Next', on_click=lambda: ss.__setitem__('step', 2))
+                    if ss['uploaded_df'] is not None and features:
+                        next_btn_css = """
+                        <style>
+                        div.stButton > button {
+                            background-color: #2563eb !important;
+                            color: #fff !important;
+                            font-weight: bold !important;
+                            border-radius: 6px !important;
+                            border: none !important;
+                            padding: 0.5em 2em !important;
+                            font-size: 1.1rem !important;
+                            box-shadow: 0 2px 8px rgba(37,99,235,0.08) !important;
+                            margin-bottom: 0.5em !important;
+                            transition: background 0.2s;
+                        }
+                        div.stButton > button:hover {
+                            background-color: #1741a6 !important;
+                            color: #fff !important;
+                        }
+                        </style>
+                        """
+                        st.markdown(next_btn_css, unsafe_allow_html=True)
+                        if st.button('Next'):
+                            ss['step'] = 2
+                            st.rerun()
+                else:
+                    def is_valid_target_select(col):
+                        return not (
+                            str(col).lower().startswith('auto_')
+                            or str(col).lower().endswith('unique-id')
+                            or str(col).lower().endswith('index')
+                            or str(col) == '::auto_unique_id::'
+                        )
+                    target_cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_target_select(c)]
+                    target = st.selectbox('Select target column', options=["Select a target..."] + target_cols, index=0, key='target_select')
+                    features = st.multiselect('Select feature columns (leave blank to use all except target)', options=cols, default=[], key='feature_select')
+                    selected_target = st.session_state.get('target_select')
+                    if selected_target is not None and selected_target != "Select a target..." and str(selected_target).strip() != '':
+                        ss['target'] = selected_target
+                    else:
+                        ss['target'] = None
+                    ss['features'] = features
+                    if ss['uploaded_df'] is not None and features and ss['target'] is not None and ss['target'] != "Select a target..." and str(ss['target']).strip() != '':
+                        next_btn_css = """
+                        <style>
+                        div.stButton > button {
+                            background-color: #2563eb !important;
+                            color: #fff !important;
+                            font-weight: bold !important;
+                            border-radius: 6px !important;
+                            border: none !important;
+                            padding: 0.5em 2em !important;
+                            font-size: 1.1rem !important;
+                            box-shadow: 0 2px 8px rgba(37,99,235,0.08) !important;
+                            margin-bottom: 0.5em !important;
+                            transition: background 0.2s;
+                        }
+                        div.stButton > button:hover {
+                            background-color: #1741a6 !important;
+                            color: #fff !important;
+                        }
+                        </style>
+                        """
+                        st.markdown(next_btn_css, unsafe_allow_html=True)
+                        st.button('Next', on_click=lambda: ss.__setitem__('step', 2))
                 def is_numeric_col(col):
                     if col not in df.columns:
                         return False
@@ -462,9 +498,11 @@ def step1_model_and_data():
                 valid_features = [col for col in features if col in df.columns]
                 num_cols = [col for col in valid_features if is_numeric_col(col)]
                 summary_cols = list(num_cols)
-                if target and is_numeric_col(target):
-                    if target not in summary_cols:
-                        summary_cols.append(target)
+                if ss['model_type'] != 'Clustering':
+                    target = ss.get('target')
+                    if target and is_numeric_col(target):
+                        if target not in summary_cols:
+                            summary_cols.append(target)
                 if len(summary_cols) > 0:
                     st.subheader('Column Summaries')
                     st.dataframe(df[summary_cols].describe().T, use_container_width=True, height=200)
@@ -600,30 +638,73 @@ def start_training():
     try:
         df = ss['uploaded_df']
         features = ss['features']
-        target = ss['target']
-        if df is not None and features is not None and target is not None:
-            X = df[features].copy()
-            y = df[target].copy()
-            mask = X.notna().all(axis=1) & y.notna()
-            X = X[mask]
-            y = y[mask]
-            train_frac = ss['settings'].get('train_frac', 0.8)
-            from sklearn.model_selection import train_test_split
-            X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=train_frac, random_state=42)
-            st.info(f"DEBUG: X_train: {X_train.shape}, X_val: {X_val.shape}, y_train: {y_train.shape}, y_val: {y_val.shape}")
-            if len(y_val) > 0:
-                st.info(f"DEBUG: First 5 y_val: {y_val.head().tolist()}")
+        model_type = ss.get('model_type')
+        if model_type == 'Clustering':
+            from sklearn.cluster import KMeans
+            from sklearn.metrics import silhouette_score
+            from sklearn.preprocessing import StandardScaler
+            if df is not None and features is not None and len(features) > 0:
+                X = df[features].copy()
+                mask = X.notna().all(axis=1)
+                X = X[mask]
+                scaler = StandardScaler()
+                X_scaled = scaler.fit_transform(X)
+                best_score = -1
+                best_k = 2
+                best_model = None
+                best_labels = None
+                for k in range(2, min(10, len(X_scaled))):
+                    model = KMeans(n_clusters=k, random_state=42)
+                    labels = model.fit_predict(X_scaled)
+                    try:
+                        score = silhouette_score(X_scaled, labels)
+                    except Exception:
+                        score = -1
+                    if score > best_score:
+                        best_score = score
+                        best_k = k
+                        best_model = model
+                        best_labels = labels
+                ss['trained_model'] = best_model
+                ss['cluster_labels'] = best_labels
+                ss['training_status'] = 'done'
+                ss['metrics'] = None
+                ss['training_logs'] = [f'KMeans clustering completed. Optimal clusters: {best_k} (silhouette={best_score:.3f})']
+                ss['clustering_X_scaled'] = X_scaled
+                ss['clustering_scaler'] = scaler
+                ss['clustering_mask'] = mask
+                ss['optimal_n_clusters'] = best_k
             else:
-                st.warning("DEBUG: y_val is empty after split!")
+                ss['training_status'] = 'error'
+                ss['training_logs'] = ['Error: No features selected or data missing.']
+        else:
+            target = ss['target']
+            if df is not None and features is not None and target is not None:
+                X = df[features].copy()
+                y = df[target].copy()
+                mask = X.notna().all(axis=1) & y.notna()
+                X = X[mask]
+                y = y[mask]
+                train_frac = ss['settings'].get('train_frac', 0.8)
+                from sklearn.model_selection import train_test_split
+                X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=train_frac, random_state=42)
+                st.info(f"DEBUG: X_train: {X_train.shape}, X_val: {X_val.shape}, y_train: {y_train.shape}, y_val: {y_val.shape}")
+                if len(y_val) > 0:
+                    st.info(f"DEBUG: First 5 y_val: {y_val.head().tolist()}")
+                else:
+                    st.warning("DEBUG: y_val is empty after split!")
+            else:
+                ss['training_status'] = 'error'
+                ss['training_logs'] = ['Error: Data, features, or target missing.']
     except Exception as e:
-        st.warning(f"DEBUG: Exception during split debug: {e}")
+        ss['training_status'] = 'error'
+        ss['training_logs'] = [f'Error during training: {e}']
 
 
 def step3_training():
     st.header('3 • Training Process')
     ss = st.session_state
-    if ss['training_status'] == 'idle' and ss['uploaded_df'] is None:
-        st.info('No training scheduled. Go to Step 2 and click Start Training.')
+    if ss['training_status'] == 'idle':
         return
     progress_placeholder = st.empty()
     log_placeholder = st.empty()
@@ -757,8 +838,7 @@ def step3_training():
             ss['training_status'] = 'error'
             st.error(readable_exception(e))
             log(f'Error during training: {str(e)}')
-    else:
-        st.info('No training in progress. Start training from Step 2.')
+    # else block removed
     st.markdown('---')
     if ss.get('training_logs'):
         st.text_area('Logs', value='\n'.join(ss['training_logs']), height=200)
@@ -810,7 +890,120 @@ def step4_results():
     }
     </style>
     """, unsafe_allow_html=True)
-    if ss['model_type'] == 'Regression':
+    if ss['model_type'] == 'Clustering':
+        # Clustering results: show cluster scatter plot and centroid table
+        from sklearn.cluster import KMeans
+        import matplotlib.pyplot as plt
+        import io
+        import pandas as pd
+        model = ss.get('trained_model')
+        X_scaled = ss.get('clustering_X_scaled')
+        features = ss.get('features')
+        df = ss.get('uploaded_df')
+        # Always get the latest features from session state
+        features = ss.get('features', [])
+        if model is not None and X_scaled is not None and isinstance(features, list) and len(features) >= 2:
+            # --- Clustering Model Performance Metrics ---
+            inertia = getattr(model, 'inertia_', None)
+            n_clusters = ss.get('optimal_n_clusters', getattr(model, 'n_clusters', None))
+            labels = model.labels_ if hasattr(model, 'labels_') else ss.get('cluster_labels')
+            sil_score = None
+            if labels is not None and X_scaled is not None and len(set(labels)) > 1:
+                from sklearn.metrics import silhouette_score
+                try:
+                    sil_score = silhouette_score(X_scaled, labels)
+                except Exception:
+                    sil_score = None
+            st.markdown('<div style="font-weight:600;font-size:1.1rem;margin-bottom:0.7rem;">Model Performance</div>', unsafe_allow_html=True)
+            st.markdown("""
+            <style>
+            .metric-square {
+                background: #fff;
+                border-radius: 10px;
+                border: 1.5px solid #e5e7eb;
+                box-shadow: 0 1px 4px rgba(37,99,235,0.06);
+                min-width: 120px;
+                min-height: 110px;
+                max-width: 160px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto;
+                padding: 0.7rem 0.5rem 0.7rem 0.5rem;
+            }
+            .metric-square .label {
+                color: #64748b;
+                font-size: 0.93rem;
+                font-weight: 500;
+                margin-bottom: 0.2rem;
+                text-align: center;
+                letter-spacing: 0.01em;
+            }
+            .metric-square .value {
+                color: #2563eb;
+                font-size: 1.35rem;
+                font-weight: 700;
+                text-align: center;
+                letter-spacing: 0.01em;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            cols = st.columns(6)
+            with cols[0]:
+                st.markdown('<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">clustering</div></div>', unsafe_allow_html=True)
+            with cols[1]:
+                st.markdown(f'<div class="metric-square"><div class="label">TRAINING SAMPLES</div><div class="value">{len(ss["uploaded_df"])} </div></div>', unsafe_allow_html=True)
+            with cols[2]:
+                st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(features)} </div></div>', unsafe_allow_html=True)
+            with cols[3]:
+                st.markdown(f'<div class="metric-square"><div class="label">SILHOUETTE_SCORE</div><div class="value">{sil_score:.2f}</div></div>' if sil_score is not None else '<div class="metric-square"><div class="label">SILHOUETTE_SCORE</div><div class="value">-</div></div>', unsafe_allow_html=True)
+            with cols[4]:
+                st.markdown(f'<div class="metric-square"><div class="label">NUM_CLUSTERS</div><div class="value">{n_clusters}</div></div>', unsafe_allow_html=True)
+            with cols[5]:
+                st.markdown(f'<div class="metric-square"><div class="label">INERTIA</div><div class="value">{inertia:.3f}</div></div>' if inertia is not None else '<div class="metric-square"><div class="label">INERTIA</div><div class="value">-</div></div>', unsafe_allow_html=True)
+            labels = model.labels_ if hasattr(model, 'labels_') else ss.get('cluster_labels')
+            centers = model.cluster_centers_ if hasattr(model, 'cluster_centers_') else None
+            # Make chart 25% larger
+            fig, ax = plt.subplots(figsize=(5.25, 4.0), dpi=180)
+            palette = ["#2563eb", "#0ea5e9", "#facc15", "#f472b6", "#22c55e", "#eab308", "#a21caf", "#f43f5e", "#14b8a6", "#64748b"]
+            for i, cluster_id in enumerate(sorted(set(labels))):
+                mask_c = labels == cluster_id
+                color = palette[i % len(palette)]
+                ax.scatter(X_scaled[mask_c, 0], X_scaled[mask_c, 1], s=38, facecolors='none', edgecolors=color, linewidths=1.2, alpha=0.85, label=f'Cluster {cluster_id}', marker='o', zorder=2)
+            # Centroids
+            if centers is not None:
+                ax.scatter(centers[:, 0], centers[:, 1], s=110, facecolors='none', edgecolors='#ef4444', marker='X', linewidths=2.5, label='Centroids', zorder=10)
+                for idx, (cx, cy) in enumerate(centers):
+                    ax.text(cx, cy, str(idx), color='#ef4444', fontsize=12, fontweight='bold', ha='center', va='center', zorder=11)
+            ax.set_xlabel(features[0], fontsize=13, labelpad=2)
+            ax.set_ylabel(features[1], fontsize=13, labelpad=2)
+            ax.set_title('KMeans Clustering Results', fontsize=15, pad=8)
+            # Move legend to right of chart
+            ax.legend(fontsize=9, loc='center left', bbox_to_anchor=(1.02, 0.5), frameon=True)
+            ax.tick_params(axis='both', labelsize=11)
+            ax.grid(True, linestyle=':', alpha=0.35)
+            fig.tight_layout(pad=0.2)
+            buf = io.BytesIO()
+            fig.savefig(buf, format="svg", bbox_inches="tight")
+            plt.close(fig)
+            svg = buf.getvalue().decode("utf-8")
+            st.markdown(f"<div style='width:100%;text-align:center'>{svg}</div>", unsafe_allow_html=True)
+            # Data table grouped by cluster with centroid numbers
+            if df is not None and labels is not None:
+                df_table = df.copy()
+                df_table['Cluster'] = labels
+                st.markdown('<div style="margin-top:1.2em;margin-bottom:0.3em;font-weight:600;font-size:1.08rem;">Cluster Assignments</div>', unsafe_allow_html=True)
+                st.dataframe(df_table.sort_values('Cluster'), use_container_width=True)
+            # Centroid coordinates table
+            if centers is not None:
+                centroid_df = pd.DataFrame(centers, columns=[f"{f} (scaled)" for f in features])
+                centroid_df.index.name = "Centroid #"
+                st.markdown('<div style="margin-top:1.2em;margin-bottom:0.3em;font-weight:600;font-size:1.08rem;">Centroid Coordinates</div>', unsafe_allow_html=True)
+                st.dataframe(centroid_df, use_container_width=True)
+        else:
+            st.info('Not enough features to plot clusters. Select at least 2 features.')
+        return
         cols = st.columns(7)
         with cols[0]:
             st.markdown('<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">regression</div></div>', unsafe_allow_html=True)
