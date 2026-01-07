@@ -379,6 +379,7 @@ def sidebar_steps():
 def step1_model_and_data():
     st.header('Stage 1: Data')
     ss = st.session_state
+    # ...existing code...
     col1, col2 = st.columns([2, 5])
     with col1:
         model_types = ['Regression', 'Binary classification', 'Multi-class classification', 'Clustering']
@@ -404,149 +405,120 @@ def step1_model_and_data():
                 st.error(readable_exception(e))
 
     with col2:
+        # Reset button to clear dataset and table (always visible on upload page)
+        def reset_selections():
+            # Remove only relevant keys to avoid full Streamlit rerun issues
+            for k in list(ss.keys()):
+                if k.startswith('uploaded_df') or k.startswith('df_sample') or k in [
+                    'features', 'target', 'step', 'model_type', 'settings', 'trained_model', 'metrics', '_X_val', '_y_val', '_y_proba', 'training_logs', 'training_status', 'training_columns', 'feature_importances', 'coefficients', 'clustering_X_scaled', 'optimal_n_clusters', 'cluster_labels']:
+                    del ss[k]
+            ss['has_left_upload'] = False
+            init_state()
+        if ss.get('uploaded_df') is not None and ss.get('has_left_upload', False):
+            st.button('Reset', on_click=reset_selections, help='Clear uploaded data and start over')
         # If reset, hide selectors and data preview
-        if ss['uploaded_df'] is not None:
+        if ss.get('uploaded_df') is not None:
             df = ss['df_sample']
-            def reset_selections():
-                ss.clear()
-                init_state()
-            # Only show selectors and preview if not reset (uploaded_df is not None)
-            if ss['uploaded_df'] is not None:
-                def is_valid_feature_select(col):
+
+            # --- Feature/target selection logic (restored) ---
+            def is_valid_feature_select(col):
+                return not (
+                    str(col).lower().startswith('auto_')
+                    or str(col).lower().endswith('unique-id')
+                    or str(col).lower().endswith('index')
+                    or str(col) == '::auto_unique_id::'
+                )
+            cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_feature_select(c)]
+            # Filter default features to only those in current options to avoid StreamlitAPIException
+            prev_features = ss.get('features')
+            if prev_features is None:
+                prev_features = []
+            safe_defaults = [f for f in prev_features if f in cols]
+            if ss['model_type'] == 'Clustering':
+                features = st.multiselect('Select feature columns', options=cols, default=safe_defaults, key='feature_select')
+                ss['features'] = features
+                ss['target'] = None
+                if features:
+                    next_btn_css = """
+                    <style>
+                    div.stButton > button {
+                        background-color: #2563eb !important;
+                        color: #fff !important;
+                        font-weight: bold !important;
+                        border-radius: 6px !important;
+                        border: none !important;
+                        padding: 0.5em 2em !important;
+                        font-size: 1.1rem !important;
+                        box-shadow: 0 2px 8px rgba(37,99,235,0.08) !important;
+                        margin-bottom: 0.5em !important;
+                        transition: background 0.2s;
+                    }
+                    div.stButton > button:hover {
+                        background-color: #1741a6 !important;
+                        color: #fff !important;
+                    }
+                    </style>
+                    """
+                    st.markdown(next_btn_css, unsafe_allow_html=True)
+                    if st.button('Next'):
+                        ss['step'] = 2
+                        st.rerun()
+            else:
+                def is_valid_target_select(col):
                     return not (
                         str(col).lower().startswith('auto_')
                         or str(col).lower().endswith('unique-id')
                         or str(col).lower().endswith('index')
                         or str(col) == '::auto_unique_id::'
                     )
-                cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_feature_select(c)]
-                if ss['model_type'] == 'Clustering':
-                    features = st.multiselect('Select feature columns', options=cols, default=[], key='feature_select')
-                    ss['features'] = features
-                    ss['target'] = None
-                    if ss['uploaded_df'] is not None and features:
-                        next_btn_css = """
-                        <style>
-                        div.stButton > button {
-                            background-color: #2563eb !important;
-                            color: #fff !important;
-                            font-weight: bold !important;
-                            border-radius: 6px !important;
-                            border: none !important;
-                            padding: 0.5em 2em !important;
-                            font-size: 1.1rem !important;
-                            box-shadow: 0 2px 8px rgba(37,99,235,0.08) !important;
-                            margin-bottom: 0.5em !important;
-                            transition: background 0.2s;
-                        }
-                        div.stButton > button:hover {
-                            background-color: #1741a6 !important;
-                            color: #fff !important;
-                        }
-                        </style>
-                        """
-                        st.markdown(next_btn_css, unsafe_allow_html=True)
-                        if st.button('Next'):
-                            ss['step'] = 2
-                            st.rerun()
+                target_cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_target_select(c)]
+                target = st.selectbox('Select target column', options=["Select a target..."] + target_cols, index=0, key='target_select')
+                features = st.multiselect('Select feature columns', options=cols, default=safe_defaults, key='feature_select')
+                selected_target = st.session_state.get('target_select')
+                if selected_target is not None and selected_target != "Select a target..." and str(selected_target).strip() != '':
+                    ss['target'] = selected_target
                 else:
-                    def is_valid_target_select(col):
-                        return not (
-                            str(col).lower().startswith('auto_')
-                            or str(col).lower().endswith('unique-id')
-                            or str(col).lower().endswith('index')
-                            or str(col) == '::auto_unique_id::'
-                        )
-                    target_cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_target_select(c)]
-                    target = st.selectbox('Select target column', options=["Select a target..."] + target_cols, index=0, key='target_select')
-                    features = st.multiselect('Select feature columns', options=cols, default=[], key='feature_select')
-                    selected_target = st.session_state.get('target_select')
-                    if selected_target is not None and selected_target != "Select a target..." and str(selected_target).strip() != '':
-                        ss['target'] = selected_target
-                    else:
-                        ss['target'] = None
-                    ss['features'] = features
-                    if ss['uploaded_df'] is not None and features and ss['target'] is not None and ss['target'] != "Select a target..." and str(ss['target']).strip() != '':
-                        next_btn_css = """
-                        <style>
-                        div.stButton > button {
-                            background-color: #2563eb !important;
-                            color: #fff !important;
-                            font-weight: bold !important;
-                            border-radius: 6px !important;
-                            border: none !important;
-                            padding: 0.5em 2em !important;
-                            font-size: 1.1rem !important;
-                            box-shadow: 0 2px 8px rgba(37,99,235,0.08) !important;
-                            margin-bottom: 0.5em !important;
-                            transition: background 0.2s;
-                        }
-                        div.stButton > button:hover {
-                            background-color: #1741a6 !important;
-                            color: #fff !important;
-                        }
-                        </style>
-                        """
-                        st.markdown(next_btn_css, unsafe_allow_html=True)
-                        st.button('Next', on_click=lambda: ss.__setitem__('step', 2))
-                def is_numeric_col(col):
-                    if col not in df.columns:
-                        return False
-                    try:
-                        pd.to_numeric(df[col].dropna())
-                        return True
-                    except Exception:
-                        return False
-                valid_features = [col for col in features if col in df.columns]
-                num_cols = [col for col in valid_features if is_numeric_col(col)]
-                summary_cols = list(num_cols)
-                if ss['model_type'] != 'Clustering':
-                    target = ss.get('target')
-                    if target and is_numeric_col(target):
-                        if target not in summary_cols:
-                            summary_cols.append(target)
-                if len(summary_cols) > 0:
-                    st.subheader('Column Summaries')
-                    st.dataframe(df[summary_cols].describe().T, use_container_width=True, height=200)
-                    import streamlit.components.v1 as components
-                    import base64
-                    import io as _io
-                    ncols = len(summary_cols)
-                    if ncols == 1:
-                        fig, axes = plt.subplots(1, 1, figsize=(4, 2.5), dpi=120)
-                        axes = [axes]
-                    else:
-                        width = min(max(2.5 * ncols, 6), 18)
-                        fig, axes = plt.subplots(1, ncols, figsize=(width, 2.5), dpi=100)
-                        if ncols == 1:
-                            axes = [axes]
-                    for ax, col in zip(axes, summary_cols):
-                        try:
-                            data = pd.to_numeric(df[col].dropna())
-                        except Exception:
-                            data = df[col].dropna()
-                        ax.hist(data, bins=15, color='#4F8DFD', alpha=0.8)
-                        ax.set_title(col, fontsize=9)
-                        ax.set_xticks([])
-                        ax.set_yticks([])
-                    plt.tight_layout()
-                    buf = _io.BytesIO()
-                    fig.savefig(buf, format="png", bbox_inches="tight")
-                    plt.close(fig)
-                    buf.seek(0)
-                    img_b64 = base64.b64encode(buf.read()).decode()
-                    components.html(f'<div style="overflow-x:auto; width:100%"><img src="data:image/png;base64,{img_b64}" style="min-width:400px; max-width:none;"/></div>', height=260)
-                st.markdown('---')
-                st.subheader('Data Preview')
-                # Always show the full DataFrame in Data Preview
-                full_df = ss['uploaded_df'] if 'uploaded_df' in ss and ss['uploaded_df'] is not None else df
-                gb = GridOptionsBuilder.from_dataframe(full_df)
+                    ss['target'] = None
+                ss['features'] = features
+                if features and ss['target'] is not None and ss['target'] != "Select a target..." and str(ss['target']).strip() != '':
+                    next_btn_css = """
+                    <style>
+                    div.stButton > button {
+                        background-color: #2563eb !important;
+                        color: #fff !important;
+                        font-weight: bold !important;
+                        border-radius: 6px !important;
+                        border: none !important;
+                        padding: 0.5em 2em !important;
+                        font-size: 1.1rem !important;
+                        box-shadow: 0 2px 8px rgba(37,99,235,0.08) !important;
+                        margin-bottom: 0.5em !important;
+                        transition: background 0.2s;
+                    }
+                    div.stButton > button:hover {
+                        background-color: #1741a6 !important;
+                        color: #fff !important;
+                    }
+                    </style>
+                    """
+                    st.markdown(next_btn_css, unsafe_allow_html=True)
+                    st.button('Next', on_click=lambda: ss.__setitem__('step', 2))
+
+            # --- Always show Data Preview after upload ---
+            st.markdown('---')
+            st.subheader('Data Preview')
+            # Always show the original uploaded DataFrame, not filtered by features
+            preview_df = ss['uploaded_df'] if 'uploaded_df' in ss and ss['uploaded_df'] is not None else df
+            if preview_df is not None and not preview_df.empty:
+                gb = GridOptionsBuilder.from_dataframe(preview_df)
                 gb.configure_default_column(enablePivot=True, enableValue=True, enableRowGroup=True)
                 gb.configure_side_bar()
                 gb.configure_grid_options(domLayout='normal')
                 grid_options = gb.build()
-                AgGrid(full_df, gridOptions=grid_options, height=600, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
-                st.markdown('---')
+                AgGrid(preview_df, gridOptions=grid_options, height=600, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
+            else:
+                st.info('No data to preview.')
+            st.markdown('---')
 
     # Removed duplicate selectors and Data Preview logic from col1
     st.markdown('---')
@@ -946,20 +918,20 @@ def step4_results():
             }
             </style>
             """, unsafe_allow_html=True)
-            cols = st.columns(6)
-            with cols[0]:
-                st.markdown('<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">clustering</div></div>', unsafe_allow_html=True)
-            with cols[1]:
-                st.markdown(f'<div class="metric-square"><div class="label">TRAINING SAMPLES</div><div class="value">{len(ss["uploaded_df"])} </div></div>', unsafe_allow_html=True)
-            with cols[2]:
-                st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(features)} </div></div>', unsafe_allow_html=True)
-            with cols[3]:
-                st.markdown(f'<div class="metric-square"><div class="label">SILHOUETTE_SCORE</div><div class="value">{sil_score:.2f}</div></div>' if sil_score is not None else '<div class="metric-square"><div class="label">SILHOUETTE_SCORE</div><div class="value">-</div></div>', unsafe_allow_html=True)
-            with cols[4]:
-                st.markdown(f'<div class="metric-square"><div class="label">NUM_CLUSTERS</div><div class="value">{n_clusters}</div></div>', unsafe_allow_html=True)
-            with cols[5]:
-                st.markdown(f'<div class="metric-square"><div class="label">INERTIA</div><div class="value">{inertia:.3f}</div></div>' if inertia is not None else '<div class="metric-square"><div class="label">INERTIA</div><div class="value">-</div></div>', unsafe_allow_html=True)
-            labels = model.labels_ if hasattr(model, 'labels_') else ss.get('cluster_labels')
+            # Show clustering metrics at the top
+            metric_cols = st.columns(4)
+            with metric_cols[0]:
+                st.markdown(f'<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">clustering</div></div>', unsafe_allow_html=True)
+            with metric_cols[1]:
+                st.markdown(f'<div class="metric-square"><div class="label">CLUSTERS</div><div class="value">{n_clusters if n_clusters is not None else "-"}</div></div>', unsafe_allow_html=True)
+            with metric_cols[2]:
+                inertia_val = f"{inertia:.3f}" if inertia is not None else "-"
+                st.markdown(f'<div class="metric-square"><div class="label">INERTIA</div><div class="value">{inertia_val}</div></div>', unsafe_allow_html=True)
+            with metric_cols[3]:
+                sil_val = f"{sil_score:.3f}" if sil_score is not None else "-"
+                st.markdown(f'<div class="metric-square"><div class="label">SILHOUETTE</div><div class="value">{sil_val}</div></div>', unsafe_allow_html=True)
+            # ...existing chart and table code...
+            # Removed undefined col2 block
             centers = model.cluster_centers_ if hasattr(model, 'cluster_centers_') else None
             # Make chart 25% larger
             fig, ax = plt.subplots(figsize=(5.25, 4.0), dpi=180)
@@ -1103,22 +1075,16 @@ def step4_results():
         else:
             st.info("No validation data available for plotting charts. If you see this message and have enough data, please report it.")
     elif ss['model_type'] in ('Binary classification', 'Multi-class classification'):
-        # Only show classification metrics, not regression plots
-        pass
-    else:
-        # Visuals for classification
+        # Show confusion matrix and ROC curve for binary, confusion matrix for multi-class
         if ss.get('_y_val') is not None:
             y_val = ss['_y_val']
-            # Use the same X_val as in validation
             X_val = ss.get('_X_val')
             if X_val is not None:
                 y_pred = ss['trained_model'].predict(X_val)
             else:
                 y_pred = ss['trained_model'].predict(pd.get_dummies(ss['uploaded_df'][ss['features']].dropna(), drop_first=True))[:len(y_val)]
-            # Confusion matrix
             from sklearn.metrics import ConfusionMatrixDisplay
-            # Show confusion matrix and ROC curve side by side for binary classification
-            if hasattr(ss['trained_model'], 'predict_proba') and ss.get('_y_proba') is not None and len(set(y_val)) == 2:
+            if ss['model_type'] == 'Binary classification' and hasattr(ss['trained_model'], 'predict_proba') and ss.get('_y_proba') is not None and len(set(y_val)) == 2:
                 y_proba = ss['_y_proba']
                 fpr, tpr, _ = roc_curve(y_val, y_proba[:, 1])
                 roc_auc = auc(fpr, tpr)
@@ -1161,48 +1127,35 @@ def step4_results():
                     svg2 = buf2.getvalue().decode("utf-8")
                     st.markdown(f"""<div style='width:100%;text-align:center'>{svg2}</div>""", unsafe_allow_html=True)
             else:
-                # Only one confusion matrix for multi-class, compact and clear
-                if ss.get('model_type') == 'Multi-class classification':
-                    # Try to use class names if available
-                    class_labels = None
-                    if hasattr(ss['trained_model'], 'classes_'):
-                        class_labels = ss['trained_model'].classes_
-                    import io
-                    fig, ax = plt.subplots(figsize=(3, 2.5), dpi=150)
-                    disp = ConfusionMatrixDisplay.from_predictions(
-                        y_val, y_pred,
-                        display_labels=class_labels,
-                        cmap=plt.cm.Blues,
-                        ax=ax,
-                        colorbar=True,
-                        values_format='.2g'
-                    )
-                    ax.set_title('Confusion Matrix', fontsize=9, pad=5)
-                    ax.set_xlabel('Predicted label', fontsize=8, labelpad=4)
-                    ax.set_ylabel('True label', fontsize=8, labelpad=4)
-                    ax.tick_params(axis='both', labelsize=7, length=2)
+                # Multi-class or fallback confusion matrix
+                class_labels = None
+                if hasattr(ss['trained_model'], 'classes_'):
+                    class_labels = ss['trained_model'].classes_
+                import io
+                fig, ax = plt.subplots(figsize=(3, 2.5), dpi=150)
+                disp = ConfusionMatrixDisplay.from_predictions(
+                    y_val, y_pred,
+                    display_labels=class_labels,
+                    cmap=plt.cm.Blues,
+                    ax=ax,
+                    colorbar=True,
+                    values_format='.2g' if ss['model_type'] == 'Multi-class classification' else None
+                )
+                ax.set_title('Confusion Matrix', fontsize=9 if ss['model_type'] == 'Multi-class classification' else 12, pad=5)
+                ax.set_xlabel('Predicted label', fontsize=8 if ss['model_type'] == 'Multi-class classification' else 10, labelpad=4)
+                ax.set_ylabel('True label', fontsize=8 if ss['model_type'] == 'Multi-class classification' else 10, labelpad=4)
+                ax.tick_params(axis='both', labelsize=7 if ss['model_type'] == 'Multi-class classification' else 9, length=2)
+                if ss['model_type'] == 'Multi-class classification':
                     cb = ax.figure.axes[-1]
                     cb.tick_params(labelsize=7, length=2)
                     fig.tight_layout(pad=0.5)
-                    buf = io.BytesIO()
-                    fig.savefig(buf, format='png', bbox_inches='tight')
-                    plt.close(fig)
-                    buf.seek(0)
-                    st.image(buf)
                 else:
-                    fig, ax = plt.subplots(figsize=(3, 2.5), dpi=150)
-                    disp = ConfusionMatrixDisplay.from_predictions(
-                        y_val, y_pred,
-                        cmap=plt.cm.Blues,
-                        ax=ax,
-                        colorbar=True
-                    )
-                    ax.set_title('Confusion Matrix', fontsize=12)
-                    ax.set_xlabel('Predicted label', fontsize=10)
-                    ax.set_ylabel('True label', fontsize=10)
-                    ax.tick_params(axis='both', labelsize=9)
                     fig.tight_layout()
-                    st.pyplot(fig)
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png', bbox_inches='tight')
+                plt.close(fig)
+                buf.seek(0)
+                st.image(buf)
     # Removed Model artifacts and download buttons as requested
 
 
