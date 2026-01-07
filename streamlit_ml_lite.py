@@ -1,4 +1,5 @@
 import streamlit as st
+# Always import matplotlib.pyplot at the top for all charting
 # Added Clustering - Inject modern UI CSS for soft, rounded, minimal look (apply globally, very top)
 st.markdown("""
     <style>
@@ -704,13 +705,11 @@ def step3_training():
     if ss['training_status'] == 'idle':
         return
     progress_placeholder = st.empty()
-    log_placeholder = st.empty()
     p = progress_placeholder.progress(0)
     logs = []
 
     def log(msg):
         logs.append(msg)
-        log_placeholder.text_area('Logs', value='\n'.join(logs), height=180)
 
     if ss['training_status'] == 'running':
         try:
@@ -748,8 +747,9 @@ def step3_training():
             train_frac = ss['settings'].get('train_frac', 0.8)
             X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=train_frac, random_state=42)
             log(f'Split data: {len(X_train)} train rows, {len(X_val)} validation rows.')
-            log(f'y_train value counts: {y_train.value_counts().to_dict()}')
-            log(f'y_val value counts: {y_val.value_counts().to_dict()}')
+            if ss['model_type'] != 'Regression':
+                log(f'y_train value counts: {y_train.value_counts().to_dict()}')
+                log(f'y_val value counts: {y_val.value_counts().to_dict()}')
             log(f'X_train columns: {list(X_train.columns)}')
             log(f'X_val columns: {list(X_val.columns)}')
             # Store validation data for plotting
@@ -837,6 +837,7 @@ def step3_training():
             log(f'Error during training: {str(e)}')
     # else block removed
     st.markdown('---')
+    # Only show the final logs after training, not intermediate logs
     if ss.get('training_logs'):
         st.text_area('Logs', value='\n'.join(ss['training_logs']), height=200)
     if ss.get('training_status') == 'done':
@@ -890,7 +891,6 @@ def step4_results():
     if ss['model_type'] == 'Clustering':
         # Clustering results: show cluster scatter plot and centroid table
         from sklearn.cluster import KMeans
-        import matplotlib.pyplot as plt
         import io
         import pandas as pd
         model = ss.get('trained_model')
@@ -1001,13 +1001,8 @@ def step4_results():
         else:
             st.info('Not enough features to plot clusters. Select at least 2 features.')
         return
+    if ss['model_type'] == 'Regression':
         cols = st.columns(7)
-        with cols[0]:
-            st.markdown('<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">regression</div></div>', unsafe_allow_html=True)
-        with cols[1]:
-            st.markdown(f'<div class="metric-square"><div class="label">TRAINING SAMPLES</div><div class="value">{len(ss["uploaded_df"])} </div></div>', unsafe_allow_html=True)
-        with cols[2]:
-            st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(ss["features"])} </div></div>', unsafe_allow_html=True)
         def safe_metric(val, fmt=".3f"):
             try:
                 if val is None:
@@ -1015,6 +1010,12 @@ def step4_results():
                 return f"{val:{fmt}}"
             except Exception:
                 return "-"
+        with cols[0]:
+            st.markdown('<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">regression</div></div>', unsafe_allow_html=True)
+        with cols[1]:
+            st.markdown(f'<div class="metric-square"><div class="label">TRAINING SAMPLES</div><div class="value">{len(ss["uploaded_df"])} </div></div>', unsafe_allow_html=True)
+        with cols[2]:
+            st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(ss["features"])} </div></div>', unsafe_allow_html=True)
         with cols[3]:
             st.markdown(f'<div class="metric-square"><div class="label">MEAN ABSOLUTE ERROR</div><div class="value">{safe_metric(metrics.get("MAE"))}</div></div>', unsafe_allow_html=True)
         with cols[4]:
@@ -1025,6 +1026,13 @@ def step4_results():
             st.markdown(f'<div class="metric-square"><div class="label">R² SCORE</div><div class="value">{safe_metric(metrics.get("R2"))}</div></div>', unsafe_allow_html=True)
     else:
         cols = st.columns(7)
+        def safe_metric(val, fmt=".3f"):
+            try:
+                if val is None:
+                    return "-"
+                return f"{val:{fmt}}"
+            except Exception:
+                return "-"
         with cols[0]:
             st.markdown('<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">classification</div></div>', unsafe_allow_html=True)
         with cols[1]:
@@ -1032,13 +1040,13 @@ def step4_results():
         with cols[2]:
             st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(ss["features"])} </div></div>', unsafe_allow_html=True)
         with cols[3]:
-            st.markdown(f'<div class="metric-square"><div class="label">ACCURACY</div><div class="value">{metrics.get("accuracy"):.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">ACCURACY</div><div class="value">{safe_metric(metrics.get("accuracy"))}</div></div>', unsafe_allow_html=True)
         with cols[4]:
-            st.markdown(f'<div class="metric-square"><div class="label">PRECISION (MACRO)</div><div class="value">{metrics.get("precision"):.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">PRECISION (MACRO)</div><div class="value">{safe_metric(metrics.get("precision"))}</div></div>', unsafe_allow_html=True)
         with cols[5]:
-            st.markdown(f'<div class="metric-square"><div class="label">RECALL (MACRO)</div><div class="value">{metrics.get("recall"):.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">RECALL (MACRO)</div><div class="value">{safe_metric(metrics.get("recall"))}</div></div>', unsafe_allow_html=True)
         with cols[6]:
-            st.markdown(f'<div class="metric-square"><div class="label">F1 (MACRO)</div><div class="value">{metrics.get("f1"):.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">F1 (MACRO)</div><div class="value">{safe_metric(metrics.get("f1"))}</div></div>', unsafe_allow_html=True)
 
     # --- Keep the rest of the visuals and plots as before ---
     if ss['model_type'] == 'Regression':
@@ -1094,6 +1102,9 @@ def step4_results():
                 st.warning(f"Could not plot regression charts: {e}")
         else:
             st.info("No validation data available for plotting charts. If you see this message and have enough data, please report it.")
+    elif ss['model_type'] in ('Binary classification', 'Multi-class classification'):
+        # Only show classification metrics, not regression plots
+        pass
     else:
         # Visuals for classification
         if ss.get('_y_val') is not None:
