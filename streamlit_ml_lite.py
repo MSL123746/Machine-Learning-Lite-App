@@ -1,6 +1,6 @@
 import streamlit as st
 # Always import matplotlib.pyplot at the top for all charting
-# Added Clustering - Inject modern UI CSS for soft, rounded, minimal look (apply globally, very top)
+# Did some cleanup - Inject modern UI CSS for soft, rounded, minimal look (apply globally, very top)
 st.markdown("""
     <style>
     /* Hide uploaded file list in file_uploader for all Streamlit versions */
