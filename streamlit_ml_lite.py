@@ -334,17 +334,17 @@ def sidebar_steps():
     if ss.get('model_type') == 'Clustering':
         steps = [
             ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
-            ('Stage 2', 'Settings', 'Select train fraction and algorithm settings.'),
+            ('Stage 2', 'Split Data', 'Select train fraction and algorithm settings.'),
             ('Stage 3', 'Training', 'Start training and view logs/progress.'),
             ('Stage 4', 'Results', 'Inspect metrics and download model.'),
         ]
     else:
         steps = [
             ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
-            ('Stage 2', 'Settings', 'Select train fraction and algorithm settings.'),
+            ('Stage 2', 'Split Data', 'Select train fraction and algorithm settings.'),
             ('Stage 3', 'Training', 'Start training and view logs/progress.'),
             ('Stage 4', 'Results', 'Inspect metrics and download model.'),
-            ('Stage 5', 'Test', 'Make single or batch predictions.'),
+            ('Stage 5', 'Test Model', 'Make single or batch predictions.'),
         ]
 
     def set_step(idx):
@@ -384,7 +384,8 @@ def step1_model_and_data():
         mt = st.selectbox('Model Type', model_types, index=model_types.index(ss.get('model_type', 'Regression')))
         ss['model_type'] = mt
         st.markdown('Upload a CSV file (max 10 MB). The app will infer a simple schema.')
-        csv_file = st.file_uploader('Upload CSV', type=['csv'], help='CSV with header row')
+        csv_file = st.file_uploader('Upload CSV', type=['csv'], help='CSV with header row. Max file size: 10 MB.')
+        st.caption(':information_source: **Note:** The maximum file size for upload is 10 MB. If you see a higher limit, it is a Streamlit default, but this app enforces a 10 MB limit.')
         if csv_file is not None:
             try:
                 data_bytes = csv_file.read()
@@ -419,7 +420,7 @@ def step1_model_and_data():
                     )
                 cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_feature_select(c)]
                 if ss['model_type'] == 'Clustering':
-                    features = st.multiselect('Select feature columns (leave blank to use all)', options=cols, default=[], key='feature_select')
+                    features = st.multiselect('Select feature columns', options=cols, default=[], key='feature_select')
                     ss['features'] = features
                     ss['target'] = None
                     if ss['uploaded_df'] is not None and features:
@@ -457,7 +458,7 @@ def step1_model_and_data():
                         )
                     target_cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_target_select(c)]
                     target = st.selectbox('Select target column', options=["Select a target..."] + target_cols, index=0, key='target_select')
-                    features = st.multiselect('Select feature columns (leave blank to use all except target)', options=cols, default=[], key='feature_select')
+                    features = st.multiselect('Select feature columns', options=cols, default=[], key='feature_select')
                     selected_target = st.session_state.get('target_select')
                     if selected_target is not None and selected_target != "Select a target..." and str(selected_target).strip() != '':
                         ss['target'] = selected_target
@@ -688,11 +689,7 @@ def start_training():
                 train_frac = ss['settings'].get('train_frac', 0.8)
                 from sklearn.model_selection import train_test_split
                 X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=train_frac, random_state=42)
-                st.info(f"DEBUG: X_train: {X_train.shape}, X_val: {X_val.shape}, y_train: {y_train.shape}, y_val: {y_val.shape}")
-                if len(y_val) > 0:
-                    st.info(f"DEBUG: First 5 y_val: {y_val.head().tolist()}")
-                else:
-                    st.warning("DEBUG: y_val is empty after split!")
+                # ...existing code...
             else:
                 ss['training_status'] = 'error'
                 ss['training_logs'] = ['Error: Data, features, or target missing.']
@@ -1011,14 +1008,21 @@ def step4_results():
             st.markdown(f'<div class="metric-square"><div class="label">TRAINING SAMPLES</div><div class="value">{len(ss["uploaded_df"])} </div></div>', unsafe_allow_html=True)
         with cols[2]:
             st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(ss["features"])} </div></div>', unsafe_allow_html=True)
+        def safe_metric(val, fmt=".3f"):
+            try:
+                if val is None:
+                    return "-"
+                return f"{val:{fmt}}"
+            except Exception:
+                return "-"
         with cols[3]:
-            st.markdown(f'<div class="metric-square"><div class="label">MEAN ABSOLUTE ERROR</div><div class="value">{metrics.get("MAE"):.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">MEAN ABSOLUTE ERROR</div><div class="value">{safe_metric(metrics.get("MAE"))}</div></div>', unsafe_allow_html=True)
         with cols[4]:
-            st.markdown(f'<div class="metric-square"><div class="label">MEAN SQUARED ERROR</div><div class="value">{metrics.get("MSE"):.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">MEAN SQUARED ERROR</div><div class="value">{safe_metric(metrics.get("MSE"))}</div></div>', unsafe_allow_html=True)
         with cols[5]:
-            st.markdown(f'<div class="metric-square"><div class="label">ROOT MEAN SQUARED ERROR</div><div class="value">{metrics.get("MSE")**0.5:.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">ROOT MEAN SQUARED ERROR</div><div class="value">{safe_metric(metrics.get("MSE")**0.5 if metrics.get("MSE") is not None else None)}</div></div>', unsafe_allow_html=True)
         with cols[6]:
-            st.markdown(f'<div class="metric-square"><div class="label">R² SCORE</div><div class="value">{metrics.get("R2"):.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">R² SCORE</div><div class="value">{safe_metric(metrics.get("R2"))}</div></div>', unsafe_allow_html=True)
     else:
         cols = st.columns(7)
         with cols[0]:
