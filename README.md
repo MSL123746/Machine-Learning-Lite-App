@@ -40,4 +40,4 @@ _Add screenshots here if desired._
 MIT License
 
 ## Author
-Your Name Here
+Mark Lee
