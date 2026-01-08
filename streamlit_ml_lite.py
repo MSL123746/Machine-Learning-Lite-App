@@ -1,6 +1,5 @@
 import streamlit as st
-# Always import matplotlib.pyplot at the top for all charting
-# Did some cleanup - Inject modern UI CSS for soft, rounded, minimal look (apply globally, very top)
+# Did some cleanup Jan 7h 2026  
 st.markdown("""
     <style>
     /* Hide uploaded file list in file_uploader for all Streamlit versions */
@@ -229,8 +228,19 @@ def main():
     st.title('Machine Learning Lite')
     # ...existing code...
     sidebar_steps()
-    # Help slider removed
-    # ...existing code...
+    ss = st.session_state
+    step = ss.get('step', 1)
+    if step == 1:
+        step1_model_and_data()
+    elif step == 2:
+        step2_settings()
+    elif step == 3:
+        # Start training automatically when entering Training step
+        start_training()
+        step3_training()
+    elif step == 4:
+        step4_results()
+    # Add more steps as needed
 
 def _inject_stepper_css():
     # CSS for sidebar and stepper
@@ -260,11 +270,11 @@ def _inject_stepper_css():
         border-color: #c7d2fe;
     }
     .mllite-stepper-btn.selected {
-        background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);
-        color: #fff;
-        border: 1.5px solid #2563eb;
-        border-left: 5px solid #2563eb;
-        box-shadow: 0 4px 18px rgba(37,99,235,0.13);
+        background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
+        color: #fff !important;
+        border: 1.5px solid #2563eb !important;
+        border-left: 5px solid #2563eb !important;
+        box-shadow: 0 4px 18px rgba(37,99,235,0.13) !important;
     }
     .mllite-stepper-btn .step-circle {
         display: flex;
@@ -593,8 +603,9 @@ def step2_settings():
         }
         </style>
         """
+        # Training now starts automatically when Stage 3 is selected; button removed.
         st.markdown(train_btn_css, unsafe_allow_html=True)
-        st.button('Start Training', on_click=start_training)
+        start_training()
 
 
 
@@ -1266,6 +1277,8 @@ def main():
     elif step == 2:
         step2_settings()
     elif step == 3:
+        # Start training automatically when entering Training step
+        start_training()
         step3_training()
     elif step == 4:
         step4_results()

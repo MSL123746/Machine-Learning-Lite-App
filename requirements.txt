@@ -1,0 +1,17 @@
+streamlit
+st_aggrid
+scikit-learn
+pandas
+numpy
+matplotlib
+plotly
+opencv-python
+python-decouple
+altair
+pydeck
+watchdog
+toml
+requests
+tenacity
+jinja2
+jsonschema
