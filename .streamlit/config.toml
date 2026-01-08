@@ -1,5 +1,6 @@
 [ui]
 hideTopBar = true
+hideControlPanel = true
 
 [client]
 showSidebarNavigation = false
