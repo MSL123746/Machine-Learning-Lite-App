@@ -1,0 +1,13 @@
+[ui]
+hideTopBar = true
+
+[client]
+showSidebarNavigation = false
+
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+
+[server]
+headless = true
