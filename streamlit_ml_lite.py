@@ -219,14 +219,15 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 
 
-st.set_page_config(page_title='Machine Learning Lite', layout='wide')
+st.set_page_config(page_title='Machine Learning Sandbox', layout='wide')
 import sklearn
+
 def main():
     from sklearn.linear_model import LogisticRegression
     st.write('LogisticRegression class:', LogisticRegression)
     init_state()
-    st.title('Machine Learning Lite')
-    # ...existing code...
+    # Place the title at the top left with custom styling
+    st.markdown('<h1 style="text-align: left; margin-bottom: 0.5em;">Machine Learning Sandbox</h1>', unsafe_allow_html=True)
     sidebar_steps()
     ss = st.session_state
     step = ss.get('step', 1)
@@ -235,7 +236,6 @@ def main():
     elif step == 2:
         step2_settings()
     elif step == 3:
-        # Start training automatically when entering Training step
         start_training()
         step3_training()
     elif step == 4:
@@ -387,7 +387,7 @@ def sidebar_steps():
     # All computer vision, DummyClassifier, and test_gray code removed
 
 def step1_model_and_data():
-    st.header('Stage 1: Data')
+    st.header('Welcome to the Machine Learning Simulator')
     ss = st.session_state
     # ...existing code...
     col1, col2 = st.columns([2, 5])
@@ -1288,4 +1288,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    _run_with_streamlit_if_needed()
