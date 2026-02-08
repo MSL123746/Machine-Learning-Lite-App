@@ -388,7 +388,7 @@ def sidebar_steps():
     # All computer vision, DummyClassifier, and test_gray code removed
 
 def step1_model_and_data():
-    st.header('Welcome to the Machine Learning SimulatorVersion 2')
+    st.header('Welcome to the Machine Learning SimulatorVersion 3')
     ss = st.session_state
     # ...existing code...
     col1, col2 = st.columns([2, 5])
@@ -552,38 +552,24 @@ def step2_settings():
         ss['settings']['train_frac'] = split / 100.0
         scale = st.checkbox('Standardize numeric features', value=True)
         ss['settings']['scale'] = bool(scale)
-        # Algorithm selection and hyperparameters are now handled upfront; section removed.
+        # Show number of training and testing rows
+        if ss['uploaded_df'] is not None and ss['features'] is not None:
+            df = ss['uploaded_df']
+            features = ss['features']
+            X = df[features].copy()
+            mask = X.notna().all(axis=1)
+            X = X[mask]
+            n_total = len(X)
+            n_train = int(n_total * ss['settings']['train_frac'])
+            n_test = n_total - n_train
+            st.info(f"Training rows: {n_train}, Testing rows: {n_test}")
     st.markdown('---')
     coln1, coln2 = st.columns([1, 1])
     with coln1:
         st.button('Back', on_click=lambda: ss.__setitem__('step', 1))
     with coln2:
-        train_btn_css = """
-        <style>
-        div.stButton > button {
-            background-color: #2563eb !important;
-            color: #fff !important;
-            font-weight: bold !important;
-            border-radius: 6px !important;
-            border: none !important;
-            padding: 0.5em 2em !important;
-            font-size: 1.1rem !important;
-            box-shadow: 0 2px 8px rgba(37,99,235,0.08) !important;
-            margin-bottom: 0.5em !important;
-            transition: background 0.2s;
-        }
-        div.stButton > button:hover {
-            background-color: #1741a6 !important;
-            color: #fff !important;
-        }
-        </style>
-        """
-        # Training now starts automatically when Stage 3 is selected; button removed.
-        st.markdown(train_btn_css, unsafe_allow_html=True)
-        start_training()
-
-
-
+        # Removed automatic training trigger. Training will only start from Stage 3 with a Train button.
+        pass
 
 def start_training():
     ss = st.session_state
@@ -1121,6 +1107,10 @@ def step4_results():
                     colorbar=True,
                     values_format='.2g' if ss['model_type'] == 'Multi-class classification' else None
                 )
+                # Fix tick mismatch error
+                n_labels = len(class_labels) if class_labels is not None else 0
+                ax.set_xticks(range(n_labels))
+                ax.set_yticks(range(n_labels))
                 ax.set_title('Confusion Matrix', fontsize=9 if ss['model_type'] == 'Multi-class classification' else 12, pad=5)
                 ax.set_xlabel('Predicted label', fontsize=8 if ss['model_type'] == 'Multi-class classification' else 10, labelpad=4)
                 ax.set_ylabel('True label', fontsize=8 if ss['model_type'] == 'Multi-class classification' else 10, labelpad=4)
