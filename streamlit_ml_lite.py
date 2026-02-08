@@ -397,7 +397,7 @@ def step1_model_and_data():
         mt = st.selectbox('Model Type', model_types, index=model_types.index(ss.get('model_type', 'Regression')))
         ss['model_type'] = mt
         st.markdown('Upload a CSV file (max 10 MB). The app will infer a simple schema.')
-        csv_file = st.file_uploader('Upload CSV', type=['csv'], help='CSV with header row. Max file size: 10 MB.')
+        csv_file = st.file_uploader('Upload CSV', type=['csv'])
         st.caption(':information_source: **Note:** The maximum file size for upload is 10 MB. If you see a higher limit, it is a Streamlit default, but this app enforces a 10 MB limit.')
         if csv_file is not None:
             try:
