@@ -388,7 +388,7 @@ def sidebar_steps():
     # All computer vision, DummyClassifier, and test_gray code removed
 
 def step1_model_and_data():
-    st.header('Welcome to the Machine Learning Simulator')
+    st.header('Welcome to the Machine Learning SimulatorVersion 2')
     ss = st.session_state
     # ...existing code...
     col1, col2 = st.columns([2, 5])
