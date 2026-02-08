@@ -98,6 +98,7 @@ def init_state():
     if 'step' not in ss:
         ss['step'] = 1
     defaults = {
+        'algorithm': 'Linear Regression',
         'model_type': 'Regression',
         'uploaded_df': None,
         'df_sample': None,
@@ -200,7 +201,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+ 
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
@@ -404,11 +405,15 @@ def step1_model_and_data():
                 if len(data_bytes) > 10 * 1024 * 1024:
                     st.error('File too large (limit 10 MB).')
                     return
-                df = pd.read_csv(io.BytesIO(data_bytes))
+                df = pd.read_csv(io.BytesIO(data_bytes), na_values=['', ' '], keep_default_na=True)
                 auto_cols = [c for c in df.columns if 'auto' in str(c).lower() or 'unique_id' in str(c).lower() or '::auto_unique_id::' in str(c)]
                 if auto_cols:
                     df = df.drop(columns=auto_cols)
                 st.session_state['uploaded_df'] = df
+                # Immediately notify user if missing values are present in uploaded data
+                missing_total = df.isna().sum().sum()
+                if missing_total > 0:
+                    st.warning(f"Missing values detected in uploaded data: {missing_total} cells are blank or NA.")
                 st.session_state['df_sample'] = df
                 st.success(f'Loaded {len(df)} rows and {len(df.columns)} columns')
             except Exception as e:
@@ -547,37 +552,7 @@ def step2_settings():
         ss['settings']['train_frac'] = split / 100.0
         scale = st.checkbox('Standardize numeric features', value=True)
         ss['settings']['scale'] = bool(scale)
-        st.write('Algorithm (recommended defaults)')
-        if ss['model_type'] == 'Regression':
-            alg_options = ['Linear Regression', 'Random Forest']
-            prev_alg = ss['settings'].get('algorithm')
-            alg_index = alg_options.index(prev_alg) if prev_alg in alg_options else 0
-            alg = st.selectbox('Algorithm', alg_options, index=alg_index)
-        elif ss['model_type'] == 'Binary classification':
-            alg_options = ['Logistic Regression (Binary)', 'Random Forest']
-            prev_alg = ss['settings'].get('algorithm')
-            alg_index = alg_options.index(prev_alg) if prev_alg in alg_options else 0
-            alg = st.selectbox('Algorithm', alg_options, index=alg_index)
-        else:  # Multi-class classification
-            alg_options = ['Logistic Regression (Multi-class)', 'Random Forest']
-            prev_alg = ss['settings'].get('algorithm')
-            alg_index = alg_options.index(prev_alg) if prev_alg in alg_options else 0
-            alg = st.selectbox('Algorithm', alg_options, index=alg_index)
-        ss['settings']['algorithm'] = alg
-    with col2:
-        st.subheader('Hyperparameters (minimal)')
-        if ss['settings'].get('algorithm', '') == 'Random Forest':
-            n_est = st.number_input('n_estimators', min_value=10, max_value=1000, value=100)
-            max_depth = st.number_input('max_depth (0 = auto)', min_value=0, max_value=100, value=0)
-            ss['settings']['n_estimators'] = int(n_est)
-            ss['settings']['max_depth'] = int(max_depth) if max_depth > 0 else None
-        elif ss['settings'].get('algorithm', '') == 'Logistic Regression':
-            C = st.number_input('C (inverse reg strength)', min_value=0.01, max_value=10.0, value=1.0)
-            penalty = st.selectbox('penalty', ['l2'], index=0)
-            ss['settings']['C'] = float(C)
-            ss['settings']['penalty'] = penalty
-        else:
-            st.write('Default parameters will be used.')
+        # Algorithm selection and hyperparameters are now handled upfront; section removed.
     st.markdown('---')
     coln1, coln2 = st.columns([1, 1])
     with coln1:
@@ -703,13 +678,13 @@ def step3_training():
             target = ss['target']
             X = df[features].copy()
             y = df[target].copy()
-            # basic preprocessing: drop rows with NA in selected cols
-            before = len(X)
-            mask = X.notna().all(axis=1) & y.notna()
-            X = X[mask]
-            y = y[mask]
-            after = len(X)
-            log(f'Dropped {before - after} rows with missing values; {after} rows remain.')
+            # Check for missing values and notify user
+            missing_X = X.isna().sum().sum()
+            missing_y = y.isna().sum()
+            if missing_X > 0 or missing_y > 0:
+                st.warning(f"Missing values detected: {missing_X} in features, {missing_y} in target. Please review your data.")
+                log(f"Missing values detected: {missing_X} in features, {missing_y} in target.")
+            # Do not drop or modify data, just notify
             p.progress(20)
             # handle categorical encoding: for simplicity, pd.get_dummies for categorical features
             numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
@@ -746,26 +721,20 @@ def step3_training():
             alg = ss['settings'].get('algorithm')
             model = None
             if ss['model_type'] == 'Regression':
-                if alg == 'Linear Regression':
+                if alg == 'Linear Regression' or alg is None:
                     model = LinearRegression()
                     log('Fitting Linear Regression...')
-                else:
-                    model = RandomForestRegressor(n_estimators=ss['settings'].get('n_estimators', 100), max_depth=ss['settings'].get('max_depth', None), random_state=42)
-                    log(f'Fitting RandomForestRegressor (n_estimators={ss["settings"].get("n_estimators", 100)})...')
             elif ss['model_type'] == 'Binary classification':
-                if alg == 'Logistic Regression (Binary)':
+                if alg == 'Logistic Regression (Binary)' or alg is None:
                     model = LogisticRegression(C=ss['settings'].get('C', 1.0), max_iter=500, solver='lbfgs')
                     log('Fitting Logistic Regression (Binary)...')
-                else:
-                    model = RandomForestClassifier(n_estimators=ss['settings'].get('n_estimators', 100), max_depth=ss['settings'].get('max_depth', None), random_state=42)
-                    log(f'Fitting RandomForestClassifier (n_estimators={ss["settings"].get("n_estimators", 100)})...')
             else:  # Multi-class classification
-                if alg == 'Logistic Regression (Multi-class)':
+                if alg == 'Logistic Regression (Multi-class)' or alg is None:
                     model = LogisticRegression(C=ss['settings'].get('C', 1.0), max_iter=500, solver='lbfgs')
                     log('Fitting Logistic Regression (Multi-class)...')
-                else:
-                    model = RandomForestClassifier(n_estimators=ss['settings'].get('n_estimators', 100), max_depth=ss['settings'].get('max_depth', None), random_state=42)
-                    log(f'Fitting RandomForestClassifier (n_estimators={ss["settings"].get("n_estimators", 100)})...')
+            if model is None:
+                log('No valid algorithm selected. Defaulting to Linear Regression.')
+                model = LinearRegression()
             p.progress(70)
             # fit
             start = time.time()
