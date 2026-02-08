@@ -1,6 +1,5 @@
 [ui]
 hideTopBar = true
-hideControlPanel = true
 
 [client]
 showSidebarNavigation = false
@@ -11,6 +10,3 @@ base = "light"
 
 [server]
 headless = true
-
-[deprecation]
-showPyplotGlobalUse = false
