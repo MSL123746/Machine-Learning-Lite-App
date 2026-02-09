@@ -388,7 +388,7 @@ def sidebar_steps():
     # All computer vision, DummyClassifier, and test_gray code removed
 
 def step1_model_and_data():
-    st.header('Welcome to the Machine Learning SimulatorVersion 5')
+    st.header('Welcome to the Machine Learning SimulatorVersion Experimenting')
     ss = st.session_state
     # ...existing code...
     col1, col2 = st.columns([2, 5])
@@ -1012,6 +1012,93 @@ def step4_results():
         df = ss['uploaded_df']
         features = ss['features']
         target = ss['target']
+        st.markdown('<div style="margin-top:1.2em;margin-bottom:0.3em;font-weight:600;font-size:1.08rem;">Interactive Feature Sliders</div>', unsafe_allow_html=True)
+        numeric_features = [f for f in features if df[f].dtype.kind in 'biufc']
+        if numeric_features:
+            slider_values = []
+            for feature in numeric_features:
+                min_val = float(df[feature].min())
+                max_val = float(df[feature].max())
+                mean_val = float(df[feature].mean())
+                slider = st.slider(
+                    feature,
+                    min_value=min_val,
+                    max_value=max_val,
+                    value=mean_val,
+                    step=1.0 if max_val - min_val > 10 else 0.01,
+                    key=f"slider_{feature}"
+                )
+                slider_values.append(slider)
+            # Predict with slider values
+            try:
+                import numpy as np
+                import pandas as pd
+                input_df = pd.DataFrame([slider_values], columns=numeric_features)
+                X_train = ss.get('_X_val')
+                if X_train is not None:
+                    input_df = input_df.reindex(columns=X_train.columns, fill_value=0)
+                pred = ss['trained_model'].predict(input_df)[0]
+                st.markdown(f'<div style="margin-top:0.8em;font-weight:600;font-size:1.08rem;">Predicted Value: <span style="color:#2563eb;font-size:1.25rem;font-weight:700;">{pred:.3f}</span></div>', unsafe_allow_html=True)
+                # Update charts with slider values
+                try:
+                    y_val = ss['_y_val'] if ss.get('_y_val') is not None else None
+                    X_val = ss['_X_val'] if ss.get('_X_val') is not None else None
+                    if y_val is not None and X_val is not None:
+                        y_pred = ss['trained_model'].predict(X_val)
+                        plot_cols = st.columns(2)
+                        with plot_cols[0]:
+                            import io
+                            fig, ax = plt.subplots(figsize=(4, 3), dpi=180)
+                            ax.scatter(
+                                range(len(y_val)), y_val - y_pred,
+                                alpha=0.9, s=32,
+                                facecolors='none', edgecolors='#2563eb', linewidths=1.5
+                            )
+                            ax.axhline(0, color='k', linewidth=1.2)
+                            ax.set_title('Residuals', fontsize=18)
+                            ax.set_xlabel('Sample Index', fontsize=14)
+                            ax.set_ylabel('Residual (y_true - y_pred)', fontsize=14)
+                            ax.tick_params(axis='both', labelsize=12)
+                            fig.tight_layout(pad=0.2)
+                            buf = io.BytesIO()
+                            fig.savefig(buf, format="svg", bbox_inches="tight")
+                            plt.close(fig)
+                            svg = buf.getvalue().decode("utf-8")
+                            st.markdown(f"<div style='width:100%;text-align:center'>{svg}</div>", unsafe_allow_html=True)
+                        with plot_cols[1]:
+                            import io
+                            fig2, ax2 = plt.subplots(figsize=(4, 3), dpi=180)
+                            ax2.scatter(
+                                y_val, y_pred,
+                                alpha=0.9, s=32,
+                                facecolors='none', edgecolors='#2563eb', linewidths=1.5
+                            )
+                            ax2.plot([y_val.min(), y_val.max()], [y_val.min(), y_val.max()], 'r--', lw=2.0)
+                            ax2.set_title('True vs Predicted', fontsize=18)
+                            ax2.set_xlabel('True Values', fontsize=14)
+                            ax2.set_ylabel('Predicted Values', fontsize=14)
+                            ax2.tick_params(axis='both', labelsize=12)
+                            fig2.tight_layout(pad=0.2)
+                            buf2 = io.BytesIO()
+                            fig2.savefig(buf2, format="svg", bbox_inches="tight")
+                            plt.close(fig2)
+                            svg2 = buf2.getvalue().decode("utf-8")
+                            st.markdown(f"<div style='width:100%;text-align:center'>{svg2}</div>", unsafe_allow_html=True)
+                except Exception as e:
+                    st.warning(f"Could not update charts: {e}")
+            except Exception as e:
+                st.warning(f"Could not predict with slider values: {e}")
+        else:
+            st.info("No numeric features available for sliders.")
+        # Predict with slider values
+        try:
+            import numpy as np
+            slider_array = np.array(slider_values).reshape(1, -1)
+            pred = ss['trained_model'].predict(slider_array)[0]
+            st.markdown(f'<div style="margin-top:0.8em;font-weight:600;font-size:1.08rem;">Predicted Value: <span style="color:#2563eb;font-size:1.25rem;font-weight:700;">{pred:.3f}</span></div>', unsafe_allow_html=True)
+        except Exception as e:
+            st.warning(f"Could not predict with slider values: {e}")
+        # --- Keep the rest of the visuals and plots as before ---
         if ss.get('_y_val') is not None and ss.get('_X_val') is not None:
             y_val = ss['_y_val']
             X_val = ss['_X_val']
