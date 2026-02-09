@@ -388,7 +388,7 @@ def sidebar_steps():
     # All computer vision, DummyClassifier, and test_gray code removed
 
 def step1_model_and_data():
-    st.header('Welcome to the Machine Learning SimulatorVersion 4')
+    st.header('Welcome to the Machine Learning SimulatorVersion 5')
     ss = st.session_state
     # ...existing code...
     col1, col2 = st.columns([2, 5])
@@ -897,22 +897,36 @@ def step4_results():
                 sil_val = f"{sil_score:.3f}" if sil_score is not None else "-"
                 st.markdown(f'<div class="metric-square"><div class="label">SILHOUETTE</div><div class="value">{sil_val}</div></div>', unsafe_allow_html=True)
             # ...existing chart and table code...
-            # Removed undefined col2 block
-            centers = model.cluster_centers_ if hasattr(model, 'cluster_centers_') else None
+            from sklearn.decomposition import PCA
+            # If more than 2 features, use PCA for 2D visualization
+            use_pca = False
+            X_plot = X_scaled
+            centers_plot = None
+            xlabel, ylabel = features[0], features[1]
+            if X_scaled.shape[1] > 2:
+                use_pca = True
+                pca = PCA(n_components=2)
+                X_plot = pca.fit_transform(X_scaled)
+                if hasattr(model, 'cluster_centers_'):
+                    centers_plot = pca.transform(model.cluster_centers_)
+                xlabel, ylabel = 'PCA 1', 'PCA 2'
+            else:
+                if hasattr(model, 'cluster_centers_'):
+                    centers_plot = model.cluster_centers_
             # Make chart 25% larger
             fig, ax = plt.subplots(figsize=(5.25, 4.0), dpi=180)
             palette = ["#2563eb", "#0ea5e9", "#facc15", "#f472b6", "#22c55e", "#eab308", "#a21caf", "#f43f5e", "#14b8a6", "#64748b"]
             for i, cluster_id in enumerate(sorted(set(labels))):
                 mask_c = labels == cluster_id
                 color = palette[i % len(palette)]
-                ax.scatter(X_scaled[mask_c, 0], X_scaled[mask_c, 1], s=38, facecolors='none', edgecolors=color, linewidths=1.2, alpha=0.85, label=f'Cluster {cluster_id}', marker='o', zorder=2)
+                ax.scatter(X_plot[mask_c, 0], X_plot[mask_c, 1], s=38, facecolors='none', edgecolors=color, linewidths=1.2, alpha=0.85, label=f'Cluster {cluster_id}', marker='o', zorder=2)
             # Centroids
-            if centers is not None:
-                ax.scatter(centers[:, 0], centers[:, 1], s=110, facecolors='none', edgecolors='#ef4444', marker='X', linewidths=2.5, label='Centroids', zorder=10)
-                for idx, (cx, cy) in enumerate(centers):
+            if centers_plot is not None:
+                ax.scatter(centers_plot[:, 0], centers_plot[:, 1], s=110, facecolors='none', edgecolors='#ef4444', marker='X', linewidths=2.5, label='Centroids', zorder=10)
+                for idx, (cx, cy) in enumerate(centers_plot):
                     ax.text(cx, cy, str(idx), color='#ef4444', fontsize=12, fontweight='bold', ha='center', va='center', zorder=11)
-            ax.set_xlabel(features[0], fontsize=13, labelpad=2)
-            ax.set_ylabel(features[1], fontsize=13, labelpad=2)
+            ax.set_xlabel(xlabel, fontsize=13, labelpad=2)
+            ax.set_ylabel(ylabel, fontsize=13, labelpad=2)
             ax.set_title('KMeans Clustering Results', fontsize=15, pad=8)
             # Move legend to right of chart
             ax.legend(fontsize=9, loc='center left', bbox_to_anchor=(1.02, 0.5), frameon=True)
@@ -923,6 +937,8 @@ def step4_results():
             fig.savefig(buf, format="svg", bbox_inches="tight")
             plt.close(fig)
             svg = buf.getvalue().decode("utf-8")
+            if use_pca:
+                st.info('More than two features selected: PCA is used to project the data into 2D for visualization. Clustering is still performed in the full feature space.')
             st.markdown(f"<div style='width:100%;text-align:center'>{svg}</div>", unsafe_allow_html=True)
             # Data table grouped by cluster with centroid numbers
             if df is not None and labels is not None:
@@ -931,8 +947,11 @@ def step4_results():
                 st.markdown('<div style="margin-top:1.2em;margin-bottom:0.3em;font-weight:600;font-size:1.08rem;">Cluster Assignments</div>', unsafe_allow_html=True)
                 st.dataframe(df_table.sort_values('Cluster'), use_container_width=True)
             # Centroid coordinates table
-            if centers is not None:
-                centroid_df = pd.DataFrame(centers, columns=[f"{f} (scaled)" for f in features])
+            if centers_plot is not None:
+                if use_pca:
+                    centroid_df = pd.DataFrame(centers_plot, columns=["PCA 1", "PCA 2"])
+                else:
+                    centroid_df = pd.DataFrame(centers_plot, columns=[f"{f} (scaled)" for f in features])
                 centroid_df.index.name = "Centroid #"
                 st.markdown('<div style="margin-top:1.2em;margin-bottom:0.3em;font-weight:600;font-size:1.08rem;">Centroid Coordinates</div>', unsafe_allow_html=True)
                 st.dataframe(centroid_df, use_container_width=True)
