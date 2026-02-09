@@ -388,7 +388,7 @@ def sidebar_steps():
     # All computer vision, DummyClassifier, and test_gray code removed
 
 def step1_model_and_data():
-    st.header('Welcome to the Machine Learning SimulatorVersion 3')
+    st.header('Welcome to the Machine Learning SimulatorVersion 4')
     ss = st.session_state
     # ...existing code...
     col1, col2 = st.columns([2, 5])
@@ -936,6 +936,8 @@ def step4_results():
                 centroid_df.index.name = "Centroid #"
                 st.markdown('<div style="margin-top:1.2em;margin-bottom:0.3em;font-weight:600;font-size:1.08rem;">Centroid Coordinates</div>', unsafe_allow_html=True)
                 st.dataframe(centroid_df, use_container_width=True)
+            # --- Data Integrity & Correlation Section for Clustering ---
+            # Data Integrity & Correlation table removed for clustering, as correlation with cluster labels is not meaningful.
         else:
             st.info('Not enough features to plot clusters. Select at least 2 features.')
         return
@@ -1127,6 +1129,49 @@ def step4_results():
                 buf.seek(0)
                 st.image(buf)
     # Removed Model artifacts and download buttons as requested
+
+    # --- Data Integrity & Correlation Section ---
+    ss = st.session_state
+    if ss.get('model_type') in ['Regression', 'Binary classification', 'Multi-class classification'] and ss.get('uploaded_df') is not None:
+        st.markdown('---')
+        st.markdown('## Data Integrity & Correlation')
+        import pandas as pd
+        import numpy as np
+        df_corr = pd.get_dummies(ss['uploaded_df'], drop_first=False)
+        selected_features = ss.get('features', [])
+        target = ss.get('target')
+        corr_data = []
+        for feature in selected_features:
+            # Numeric feature: use original column
+            if feature in ss['uploaded_df'].select_dtypes(include=[np.number]).columns:
+                try:
+                    corr = abs(np.corrcoef(ss['uploaded_df'][feature], ss['uploaded_df'][target])[0, 1])
+                except Exception:
+                    corr = 0.0
+            else:
+                # Categorical: use max correlation of one-hot columns
+                onehot_cols = [col for col in df_corr.columns if col.startswith(feature + '_')]
+                if onehot_cols:
+                    try:
+                        corrs = [abs(np.corrcoef(df_corr[col], df_corr[target])[0, 1]) for col in onehot_cols]
+                        corr = max(corrs)
+                    except Exception:
+                        corr = 0.0
+                else:
+                    corr = 0.0
+            pct_impact = f"{corr*100:.1f}%"
+            if corr > 0.7:
+                comment = 'Strong direct impact on target.'
+            elif corr > 0.3:
+                comment = 'Moderate influence; may be useful.'
+            elif corr < 0.1:
+                comment = 'Acts as noise; little effect.'
+            else:
+                comment = 'Weak/uncertain effect.'
+            corr_data.append({'Feature': feature, 'Max Correlation': pct_impact, 'Comment': comment})
+        corr_df = pd.DataFrame(corr_data).sort_values('Max Correlation', ascending=False)
+        st.markdown('### Feature Correlation & Impact Table')
+        st.dataframe(corr_df[['Feature', 'Max Correlation', 'Comment']], use_container_width=True)
 
 
 def step5_test():
