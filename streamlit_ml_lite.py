@@ -1,5 +1,5 @@
 import streamlit as st
-# Inject modern UI CSS for soft, rounded, minimal look (apply globally, very top)
+# New Repo Jan 8, 2026 - First Commit
 st.markdown("""
     <style>
     /* Hide uploaded file list in file_uploader for all Streamlit versions */
@@ -98,6 +98,7 @@ def init_state():
     if 'step' not in ss:
         ss['step'] = 1
     defaults = {
+        'algorithm': 'Linear Regression',
         'model_type': 'Regression',
         'uploaded_df': None,
         'df_sample': None,
@@ -130,7 +131,7 @@ def _run_with_streamlit_if_needed():
     try:
         # If we're running under streamlit's runtime, get_script_run_ctx() will
         # return a context object. In that case, just execute main().
-        from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
+        from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
         ctx = get_script_run_ctx()
     except Exception:
         ctx = None
@@ -166,7 +167,7 @@ def _run_with_streamlit_if_needed():
         try:
             # If we're running under streamlit's runtime, get_script_run_ctx() will
             # return a context object. In that case, just execute main().
-            from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
+            from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
             ctx = get_script_run_ctx()
         except Exception:
             ctx = None
@@ -197,11 +198,13 @@ import time
 from typing import Optional
 
 import numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+ 
 from sklearn.linear_model import LinearRegression, LogisticRegression
+import numpy as np
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
@@ -218,111 +221,29 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 
-def show_help_slider():
-    ss = st.session_state
-    help_content = {
-        1: {
-            'title': 'Help: Model & Data',
-            'body': 'Upload your CSV file and select the target and features.\n\n[Sample Data](https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv)\n\n[Watch: Data Upload Tutorial](https://www.youtube.com/watch?v=R2nr1uZ8ffc)'
-        },
-        2: {
-            'title': 'Help: Settings',
-            'body': 'Adjust training settings and algorithm options. [More Info](https://scikit-learn.org/stable/supervised_learning.html)'
-        },
-        3: {
-            'title': 'Help: Training',
-            'body': 'Start training and monitor logs. [Model Training Guide](https://www.youtube.com/watch?v=0Lt9w-BxKFQ)'
-        },
-        4: {
-            'title': 'Help: Results',
-            'body': 'Review metrics and download your model. [Understanding Metrics](https://scikit-learn.org/stable/modules/model_evaluation.html)'
-        },
-        5: {
-            'title': 'Help: Test',
-            'body': 'Test your model with new data. [Batch Prediction Demo](https://www.youtube.com/watch?v=GJoX9F-1Jb0)'
-        },
-    }
-    step = ss.get('step', 1)
-    if 'help_slider_open' not in ss:
-        ss['help_slider_open'] = False
-    st.markdown('''
-        <style>
-        #help-fab {{
-            position: fixed;
-            top: 40px;
-            right: 32px;
-            z-index: 9999;
-            background: #2563eb;
-            color: #fff;
-            border-radius: 50%;
-            width: 48px;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            box-shadow: 0 4px 16px rgba(37,99,235,0.18);
-            border: none;
-            cursor: pointer;
-            transition: background 0.2s;
-        }}
-        #help-fab:hover {{ background: #0ea5e9; }}
-        #help-slider {{
-            position: fixed;
-            top: 0;
-            right: 0;
-            width: 370px;
-            height: 100vh;
-            background: #f8fafc;
-            box-shadow: -2px 0 16px rgba(37,99,235,0.10);
-            z-index: 9998;
-            padding: 48px 28px 24px 28px;
-            /* Added extra top padding to push text down */
-            transform: translateX({});
-            transition: transform 0.3s cubic-bezier(.4,0,.2,1);
-            overflow-y: auto;
-        }}
-        #help-slider h3 {{ margin-top: 0; color: #2563eb; }}
-        #help-slider .close-btn {{
-            position: absolute;
-            top: 18px;
-            right: 18px;
-            background: none;
-            border: none;
-            font-size: 22px;
-            color: #64748b;
-            cursor: pointer;
-        }}
-        </style>
-    '''.format('0' if ss['help_slider_open'] else '100%'), unsafe_allow_html=True)
-    if not ss['help_slider_open']:
-        if st.button('Click Me for Help', key='help_fab', help='Show help panel', use_container_width=False):
-            ss['help_slider_open'] = True
-            st.rerun()
-    if ss['help_slider_open']:
-        content = help_content.get(step, {'title': 'Help', 'body': 'No help available.'})
-        st.markdown(f'''
-            <div id="help-slider">
-                <button class="close-btn" onclick="window.dispatchEvent(new CustomEvent('help-slider-close'))">×</button>
-                <h3>{content['title']}</h3>
-                <div style="font-size:1.05rem;line-height:1.6;">{content['body']}</div>
-            </div>
-        ''', unsafe_allow_html=True)
-        if st.button('Close Help', key='close_help', use_container_width=False):
-            ss['help_slider_open'] = False
-            st.rerun()
 
-st.set_page_config(page_title='Machine Learning Lite', layout='wide')
+st.set_page_config(page_title='Machine Learning Sandbox', layout='wide')
 import sklearn
+
 def main():
     from sklearn.linear_model import LogisticRegression
     st.write('LogisticRegression class:', LogisticRegression)
     init_state()
-    st.title('Machine Learning Lite')
-    # ...existing code...
+    # Place the title at the top left with custom styling
+    st.markdown('<h1 style="text-align: left; margin-bottom: 0.5em;">Machine Learning Sandbox</h1>', unsafe_allow_html=True)
     sidebar_steps()
-    show_help_slider()  # <-- Add this line here
-    # ...existing code...
+    ss = st.session_state
+    step = ss.get('step', 1)
+    if step == 1:
+        step1_model_and_data()
+    elif step == 2:
+        step2_settings()
+    elif step == 3:
+        start_training()
+        step3_training()
+    elif step == 4:
+        step4_results()
+    # Add more steps as needed
 
 def _inject_stepper_css():
     # CSS for sidebar and stepper
@@ -352,11 +273,11 @@ def _inject_stepper_css():
         border-color: #c7d2fe;
     }
     .mllite-stepper-btn.selected {
-        background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);
-        color: #fff;
-        border: 1.5px solid #2563eb;
-        border-left: 5px solid #2563eb;
-        box-shadow: 0 4px 18px rgba(37,99,235,0.13);
+        background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
+        color: #fff !important;
+        border: 1.5px solid #2563eb !important;
+        border-left: 5px solid #2563eb !important;
+        box-shadow: 0 4px 18px rgba(37,99,235,0.13) !important;
     }
     .mllite-stepper-btn .step-circle {
         display: flex;
@@ -423,13 +344,22 @@ def sidebar_steps():
     # Inject CSS for prettier sidebar buttons
     _inject_stepper_css()
     ss = st.session_state
-    steps = [
-        ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
-        ('Stage 2', 'Settings', 'Select train fraction and algorithm settings.'),
-        ('Stage 3', 'Training', 'Start training and view logs/progress.'),
-        ('Stage 4', 'Results', 'Inspect metrics and download model.'),
-        ('Stage 5', 'Test', 'Make single or batch predictions.'),
-    ]
+    ss = st.session_state
+    if ss.get('model_type') == 'Clustering':
+        steps = [
+            ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
+            ('Stage 2', 'Split Data', 'Select train fraction and algorithm settings.'),
+            ('Stage 3', 'Training', 'Start training and view logs/progress.'),
+            ('Stage 4', 'Results', 'Inspect metrics and download model.'),
+        ]
+    else:
+        steps = [
+            ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
+            ('Stage 2', 'Split Data', 'Select train fraction and algorithm settings.'),
+            ('Stage 3', 'Training', 'Start training and view logs/progress.'),
+            ('Stage 4', 'Results', 'Inspect metrics and download model.'),
+            ('Stage 5', 'Test Model', 'Make single or batch predictions.'),
+        ]
 
     def set_step(idx):
         ss['step'] = idx + 1
@@ -456,226 +386,101 @@ def sidebar_steps():
             )
     st.sidebar.markdown("---")
     st.sidebar.success('ML App Ready for Use!')
-    st.sidebar.markdown("<div style='height:32px;'></div>", unsafe_allow_html=True)
-    # Computer Vision button below the success message, using Streamlit's button for state change
-    cv_selected = (ss.get('step', 1) == 'cv')
-    cv_style = "background: #ffe5b4; border: 2px solid #ff9800; border-radius: 10px; padding: 0.7rem 1rem; font-weight: 600; font-size: 1.05rem; color: #b45309; display: flex; align-items: center; min-height: 48px; justify-content: center; margin-bottom: 0.7rem; width: 100%; box-sizing: border-box;"
-    if cv_selected:
-        cv_style += " box-shadow: 0 4px 18px rgba(255,152,0,0.13);"
-    if st.sidebar.button('CV: Computer Vision', key='cv_btn_sidebar', help='Go to Computer Vision section', use_container_width=True):
-        ss['step'] = 'cv'
-        st.rerun()
-
-def computer_vision_ui():
-    # Inject modern UI CSS for soft, rounded, minimal look
-    st.markdown("""
-        <style>
-        /* Hide uploaded file list in file_uploader for all Streamlit versions */
-        div[data-testid="stFileUploader"] ul,
-        div[data-testid="stFileUploader"] .uploadedFile,
-        div[data-testid="stFileUploader"] .st-emotion-cache-1m3b9l5,
-        div[data-testid="stFileUploader"] .st-emotion-cache-1c7y2kd {
-            display: none !important;
-        }
-
-        /* Modern card look for containers */
-        section.main > div {
-            background: #fff;
-            border-radius: 18px;
-            box-shadow: 0 2px 16px rgba(37,99,235,0.07);
-            padding: 2.2rem 2.5rem 2.5rem 2.5rem;
-            margin-top: 1.2rem;
-        }
-        /* Sidebar styling */
-        [data-testid="stSidebar"] {
-            background: #f8fafc !important;
-            border-radius: 18px 0 0 18px;
-            box-shadow: 2px 0 16px rgba(37,99,235,0.07);
-        }
-        /* Sidebar button highlight */
-        .mllite-stepper-btn.selected, .st-emotion-cache-1v0mbdj {
-            background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
-            color: #fff !important;
-            border: 1.5px solid #2563eb !important;
-            border-left: 5px solid #2563eb !important;
-            box-shadow: 0 4px 18px rgba(37,99,235,0.13) !important;
-        }
-        /* Sidebar button normal */
-        .mllite-stepper-btn {
-            border-radius: 10px !important;
-            background: #fff !important;
-            color: #1e293b !important;
-            border: 1.5px solid #e5e7eb !important;
-            box-shadow: 0 1px 6px rgba(37,99,235,0.07) !important;
-        }
-        /* File uploader styling */
-        div[data-testid="stFileUploader"] > div:first-child {
-            border-radius: 12px !important;
-            background: #f1f5f9 !important;
-            border: 1.5px solid #e5e7eb !important;
-            box-shadow: 0 1px 6px rgba(37,99,235,0.07) !important;
-        }
-        /* Buttons */
-        button, div.stButton > button {
-            border-radius: 10px !important;
-            background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
-            color: #fff !important;
-            font-weight: 600 !important;
-            font-size: 1.08rem !important;
-            box-shadow: 0 2px 8px rgba(37,99,235,0.10) !important;
-            border: none !important;
-            padding: 0.6em 2.2em !important;
-            margin-bottom: 0.5em !important;
-            transition: background 0.2s;
-        }
-        button:hover, div.stButton > button:hover {
-            background: #1741a6 !important;
-            color: #fff !important;
-        }
-        /* Headings */
-        h1, h2, h3, h4, h5, h6 {
-            font-family: 'Segoe UI', 'Inter', Arial, sans-serif !important;
-            font-weight: 700 !important;
-            letter-spacing: 0.01em;
-        }
-        /* General font */
-        html, body, .stApp {
-            font-family: 'Segoe UI', 'Inter', Arial, sans-serif !important;
-            color: #1e293b !important;
-        }
-        /* Remove default Streamlit top padding */
-        .block-container {
-            padding-top: 1.2rem !important;
-        }
-        /* Help button style */
-        #help-fab {
-            background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
-            color: #fff !important;
-            border-radius: 50% !important;
-            box-shadow: 0 4px 16px rgba(37,99,235,0.18) !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-    import cv2
-    from PIL import Image
-    st.header('Computer Vision')
-    st.write('Upload one or more images to analyze or train a model.')
-    uploaded_files = st.file_uploader('Upload Image(s)', type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
-    if uploaded_files:
-        if 'process_images' not in st.session_state:
-            st.session_state['process_images'] = False
-        st.info(f'{len(uploaded_files)} image(s) uploaded.')
-        process = st.button('Process All Images', key='process_all_btn')
-        if process:
-            st.session_state['process_images'] = True
-            st.session_state['test_image_uploaded'] = False  # Reset test image state on new processing
-        # Only show results and test uploader after processing
-        if st.session_state['process_images']:
-            st.subheader('Processing Results')
-            num_files = len(uploaded_files)
-            for uploaded_file in uploaded_files:
-                image = Image.open(uploaded_file)
-                img_array = np.array(image)
-                gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-            st.success(f'{num_files} image(s) processed!')
-            st.markdown('---')
-            st.subheader('Model Performance Metrics (Example)')
-            st.write('Accuracy: 0.95')
-            st.write('Precision: 0.93')
-            st.write('Recall: 0.92')
-            st.write('F1 Score: 0.925')
-            st.markdown('---')
-            # Only show test uploader if a test image has not been uploaded yet
-            if not st.session_state.get('test_image_uploaded', False):
-                st.subheader('Test Model with New Image')
-                test_file = st.file_uploader(
-                    'Upload a test image to compare to the trained model',
-                    type=['png', 'jpg', 'jpeg'],
-                    key='test_image_upload_after_processing'
-                )
-                if test_file is not None:
-                    # Store file in session state and immediately run prediction
-                    st.session_state['test_image_uploaded'] = True
-                    st.session_state['test_image_file_name'] = test_file.name
-                    st.session_state['test_image_obj'] = test_file
-                    # Run prediction logic
-                    test_image = Image.open(test_file)
-                    test_img_array = np.array(test_image)
-                    test_gray = cv2.cvtColor(test_img_array, cv2.COLOR_RGB2GRAY)
-                    import pickle
-                    import os
-                    model_path = 'model.pkl'
-                    if os.path.exists(model_path):
-                        with open(model_path, 'rb') as f:
-                            model = pickle.load(f)
-                    else:
-                        from sklearn.dummy import DummyClassifier
-                        model = DummyClassifier(strategy='uniform')
-                        X_fake = np.random.rand(10, test_gray.size)
-                        y_fake = np.random.randint(0, 2, 10)
-                        model.fit(X_fake, y_fake)
-                        with open(model_path, 'wb') as f:
-                            pickle.dump(model, f)
-                    test_feature = [test_gray.flatten()]
-                    pred = model.predict(test_feature)[0]
-                    st.session_state['test_image_prediction'] = pred
-                    st.rerun()
-            else:
-                # Only show result and button to test another image
-                pred = st.session_state.get('test_image_prediction', None)
-                file_name = st.session_state.get('test_image_file_name', '')
-                if pred is not None:
-                    st.success(f'Test image {file_name} processed! Model prediction: {pred}')
-                if st.button('Test Another Image'):
-                    st.session_state['test_image_uploaded'] = False
-                    st.session_state['test_image_prediction'] = None
-                    st.session_state['test_image_file_name'] = ''
-                    st.session_state['test_image_obj'] = None
-                    st.rerun()
+    # Computer Vision button and related code removed
+    # All computer vision, DummyClassifier, and test_gray code removed2
 
 def step1_model_and_data():
-    st.header('Stage 1: Data')
+    st.header('Welcome to the Machine Learning Simulator 02092026')
     ss = st.session_state
+    # ...existing code...
     col1, col2 = st.columns([2, 5])
     with col1:
-        model_types = ['Regression', 'Binary classification', 'Multi-class classification']
+        model_types = ['Regression', 'Binary classification', 'Multi-class classification', 'Clustering']
         mt = st.selectbox('Model Type', model_types, index=model_types.index(ss.get('model_type', 'Regression')))
         ss['model_type'] = mt
         st.markdown('Upload a CSV file (max 10 MB). The app will infer a simple schema.')
-        csv_file = st.file_uploader('Upload CSV', type=['csv'], help='CSV with header row')
+        csv_file = st.file_uploader('Upload CSV', type=['csv'])
+        st.caption(':information_source: **Note:** The maximum file size for upload is 10 MB. If you see a higher limit, it is a Streamlit default, but this app enforces a 10 MB limit.')
         if csv_file is not None:
             try:
                 data_bytes = csv_file.read()
                 if len(data_bytes) > 10 * 1024 * 1024:
                     st.error('File too large (limit 10 MB).')
                     return
-                df = pd.read_csv(io.BytesIO(data_bytes))
+                df = pd.read_csv(io.BytesIO(data_bytes), na_values=['', ' '], keep_default_na=True)
                 auto_cols = [c for c in df.columns if 'auto' in str(c).lower() or 'unique_id' in str(c).lower() or '::auto_unique_id::' in str(c)]
                 if auto_cols:
                     df = df.drop(columns=auto_cols)
                 st.session_state['uploaded_df'] = df
+                # Immediately notify user if missing values are present in uploaded data
+                missing_total = df.isna().sum().sum()
+                if missing_total > 0:
+                    st.warning(f"Missing values detected in uploaded data: {missing_total} cells are blank or NA.")
                 st.session_state['df_sample'] = df
                 st.success(f'Loaded {len(df)} rows and {len(df.columns)} columns')
             except Exception as e:
                 st.error(readable_exception(e))
 
     with col2:
+        # Reset button to clear dataset and table (always visible on upload page)
+        def reset_selections():
+            # Remove only relevant keys to avoid full Streamlit rerun issues
+            for k in list(ss.keys()):
+                if k.startswith('uploaded_df') or k.startswith('df_sample') or k in [
+                    'features', 'target', 'step', 'model_type', 'settings', 'trained_model', 'metrics', '_X_val', '_y_val', '_y_proba', 'training_logs', 'training_status', 'training_columns', 'feature_importances', 'coefficients', 'clustering_X_scaled', 'optimal_n_clusters', 'cluster_labels']:
+                    del ss[k]
+            ss['has_left_upload'] = False
+            init_state()
+        if ss.get('uploaded_df') is not None and ss.get('has_left_upload', False):
+            st.button('Reset', on_click=reset_selections, help='Clear uploaded data and start over')
         # If reset, hide selectors and data preview
-        if ss['uploaded_df'] is not None:
+        if ss.get('uploaded_df') is not None:
             df = ss['df_sample']
-            def reset_selections():
-                ss.clear()
-                init_state()
-            # Only show selectors and preview if not reset (uploaded_df is not None)
-            if ss['uploaded_df'] is not None:
-                def is_valid_feature_select(col):
-                    return not (
-                        str(col).lower().startswith('auto_')
-                        or str(col).lower().endswith('unique-id')
-                        or str(col).lower().endswith('index')
-                        or str(col) == '::auto_unique_id::'
-                    )
-                cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_feature_select(c)]
+
+            # --- Feature/target selection logic (restored) ---
+            def is_valid_feature_select(col):
+                return not (
+                    str(col).lower().startswith('auto_')
+                    or str(col).lower().endswith('unique-id')
+                    or str(col).lower().endswith('index')
+                    or str(col) == '::auto_unique_id::'
+                )
+            cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_feature_select(c)]
+            # Filter default features to only those in current options to avoid StreamlitAPIException
+            prev_features = ss.get('features')
+            if prev_features is None:
+                prev_features = []
+            safe_defaults = [f for f in prev_features if f in cols]
+            if ss['model_type'] == 'Clustering':
+                features = st.multiselect('Select feature columns', options=cols, default=safe_defaults, key='feature_select')
+                ss['features'] = features
+                ss['target'] = None
+                if features:
+                    next_btn_css = """
+                    <style>
+                    div.stButton > button {
+                        background-color: #2563eb !important;
+                        color: #fff !important;
+                        font-weight: bold !important;
+                        border-radius: 6px !important;
+                        border: none !important;
+                        padding: 0.5em 2em !important;
+                        font-size: 1.1rem !important;
+                        box-shadow: 0 2px 8px rgba(37,99,235,0.08) !important;
+                        margin-bottom: 0.5em !important;
+                        transition: background 0.2s;
+                    }
+                    div.stButton > button:hover {
+                        background-color: #1741a6 !important;
+                        color: #fff !important;
+                    }
+                    </style>
+                    """
+                    st.markdown(next_btn_css, unsafe_allow_html=True)
+                    if st.button('Next'):
+                        ss['step'] = 2
+                        st.rerun()
+            else:
                 def is_valid_target_select(col):
                     return not (
                         str(col).lower().startswith('auto_')
@@ -684,18 +489,15 @@ def step1_model_and_data():
                         or str(col) == '::auto_unique_id::'
                     )
                 target_cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_target_select(c)]
-                # Use stable keys for widgets so Streamlit tracks their values
                 target = st.selectbox('Select target column', options=["Select a target..."] + target_cols, index=0, key='target_select')
-                features = st.multiselect('Select feature columns (leave blank to use all except target)', options=cols, default=[], key='feature_select')
-                # Only set target if the user has made a selection (not just defaulted to the first option)
+                features = st.multiselect('Select feature columns', options=cols, default=safe_defaults, key='feature_select')
                 selected_target = st.session_state.get('target_select')
                 if selected_target is not None and selected_target != "Select a target..." and str(selected_target).strip() != '':
                     ss['target'] = selected_target
                 else:
                     ss['target'] = None
                 ss['features'] = features
-                # Show Next button only if dataset, features, and a real user-selected target (not placeholder) are present
-                if ss['uploaded_df'] is not None and features and ss['target'] is not None and ss['target'] != "Select a target..." and str(ss['target']).strip() != '':
+                if features and ss['target'] is not None and ss['target'] != "Select a target..." and str(ss['target']).strip() != '':
                     next_btn_css = """
                     <style>
                     div.stButton > button {
@@ -718,62 +520,22 @@ def step1_model_and_data():
                     """
                     st.markdown(next_btn_css, unsafe_allow_html=True)
                     st.button('Next', on_click=lambda: ss.__setitem__('step', 2))
-                def is_numeric_col(col):
-                    if col not in df.columns:
-                        return False
-                    try:
-                        pd.to_numeric(df[col].dropna())
-                        return True
-                    except Exception:
-                        return False
-                valid_features = [col for col in features if col in df.columns]
-                num_cols = [col for col in valid_features if is_numeric_col(col)]
-                summary_cols = list(num_cols)
-                if target and is_numeric_col(target):
-                    if target not in summary_cols:
-                        summary_cols.append(target)
-                if len(summary_cols) > 0:
-                    st.subheader('Column Summaries')
-                    st.dataframe(df[summary_cols].describe().T, use_container_width=True, height=200)
-                    import streamlit.components.v1 as components
-                    import base64
-                    import io as _io
-                    ncols = len(summary_cols)
-                    if ncols == 1:
-                        fig, axes = plt.subplots(1, 1, figsize=(4, 2.5), dpi=120)
-                        axes = [axes]
-                    else:
-                        width = min(max(2.5 * ncols, 6), 18)
-                        fig, axes = plt.subplots(1, ncols, figsize=(width, 2.5), dpi=100)
-                        if ncols == 1:
-                            axes = [axes]
-                    for ax, col in zip(axes, summary_cols):
-                        try:
-                            data = pd.to_numeric(df[col].dropna())
-                        except Exception:
-                            data = df[col].dropna()
-                        ax.hist(data, bins=15, color='#4F8DFD', alpha=0.8)
-                        ax.set_title(col, fontsize=9)
-                        ax.set_xticks([])
-                        ax.set_yticks([])
-                    plt.tight_layout()
-                    buf = _io.BytesIO()
-                    fig.savefig(buf, format="png", bbox_inches="tight")
-                    plt.close(fig)
-                    buf.seek(0)
-                    img_b64 = base64.b64encode(buf.read()).decode()
-                    components.html(f'<div style="overflow-x:auto; width:100%"><img src="data:image/png;base64,{img_b64}" style="min-width:400px; max-width:none;"/></div>', height=260)
-                st.markdown('---')
-                st.subheader('Data Preview')
-                # Always show the full DataFrame in Data Preview
-                full_df = ss['uploaded_df'] if 'uploaded_df' in ss and ss['uploaded_df'] is not None else df
-                gb = GridOptionsBuilder.from_dataframe(full_df)
+
+            # --- Always show Data Preview after upload ---
+            st.markdown('---')
+            st.subheader('Data Preview')
+            # Always show the original uploaded DataFrame, not filtered by features
+            preview_df = ss['uploaded_df'] if 'uploaded_df' in ss and ss['uploaded_df'] is not None else df
+            if preview_df is not None and not preview_df.empty:
+                gb = GridOptionsBuilder.from_dataframe(preview_df)
                 gb.configure_default_column(enablePivot=True, enableValue=True, enableRowGroup=True)
                 gb.configure_side_bar()
                 gb.configure_grid_options(domLayout='normal')
                 grid_options = gb.build()
-                AgGrid(full_df, gridOptions=grid_options, height=600, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
-                st.markdown('---')
+                AgGrid(preview_df, gridOptions=grid_options, height=600, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
+            else:
+                st.info('No data to preview.')
+            st.markdown('---')
 
     # Removed duplicate selectors and Data Preview logic from col1
     st.markdown('---')
@@ -792,67 +554,24 @@ def step2_settings():
         ss['settings']['train_frac'] = split / 100.0
         scale = st.checkbox('Standardize numeric features', value=True)
         ss['settings']['scale'] = bool(scale)
-        st.write('Algorithm (recommended defaults)')
-        if ss['model_type'] == 'Regression':
-            alg_options = ['Linear Regression', 'Random Forest']
-            prev_alg = ss['settings'].get('algorithm')
-            alg_index = alg_options.index(prev_alg) if prev_alg in alg_options else 0
-            alg = st.selectbox('Algorithm', alg_options, index=alg_index)
-        elif ss['model_type'] == 'Binary classification':
-            alg_options = ['Logistic Regression (Binary)', 'Random Forest']
-            prev_alg = ss['settings'].get('algorithm')
-            alg_index = alg_options.index(prev_alg) if prev_alg in alg_options else 0
-            alg = st.selectbox('Algorithm', alg_options, index=alg_index)
-        else:  # Multi-class classification
-            alg_options = ['Logistic Regression (Multi-class)', 'Random Forest']
-            prev_alg = ss['settings'].get('algorithm')
-            alg_index = alg_options.index(prev_alg) if prev_alg in alg_options else 0
-            alg = st.selectbox('Algorithm', alg_options, index=alg_index)
-        ss['settings']['algorithm'] = alg
-    with col2:
-        st.subheader('Hyperparameters (minimal)')
-        if ss['settings'].get('algorithm', '') == 'Random Forest':
-            n_est = st.number_input('n_estimators', min_value=10, max_value=1000, value=100)
-            max_depth = st.number_input('max_depth (0 = auto)', min_value=0, max_value=100, value=0)
-            ss['settings']['n_estimators'] = int(n_est)
-            ss['settings']['max_depth'] = int(max_depth) if max_depth > 0 else None
-        elif ss['settings'].get('algorithm', '') == 'Logistic Regression':
-            C = st.number_input('C (inverse reg strength)', min_value=0.01, max_value=10.0, value=1.0)
-            penalty = st.selectbox('penalty', ['l2'], index=0)
-            ss['settings']['C'] = float(C)
-            ss['settings']['penalty'] = penalty
-        else:
-            st.write('Default parameters will be used.')
+        # Show number of training and testing rows
+        if ss['uploaded_df'] is not None and ss['features'] is not None:
+            df = ss['uploaded_df']
+            features = ss['features']
+            X = df[features].copy()
+            mask = X.notna().all(axis=1)
+            X = X[mask]
+            n_total = len(X)
+            n_train = int(n_total * ss['settings']['train_frac'])
+            n_test = n_total - n_train
+            st.info(f"Training rows: {n_train}, Testing rows: {n_test}")
     st.markdown('---')
     coln1, coln2 = st.columns([1, 1])
     with coln1:
         st.button('Back', on_click=lambda: ss.__setitem__('step', 1))
     with coln2:
-        train_btn_css = """
-        <style>
-        div.stButton > button {
-            background-color: #2563eb !important;
-            color: #fff !important;
-            font-weight: bold !important;
-            border-radius: 6px !important;
-            border: none !important;
-            padding: 0.5em 2em !important;
-            font-size: 1.1rem !important;
-            box-shadow: 0 2px 8px rgba(37,99,235,0.08) !important;
-            margin-bottom: 0.5em !important;
-            transition: background 0.2s;
-        }
-        div.stButton > button:hover {
-            background-color: #1741a6 !important;
-            color: #fff !important;
-        }
-        </style>
-        """
-        st.markdown(train_btn_css, unsafe_allow_html=True)
-        st.button('Start Training', on_click=start_training)
-
-
-
+        # Removed automatic training trigger. Training will only start from Stage 3 with a Train button.
+        pass
 
 def start_training():
     ss = st.session_state
@@ -867,39 +586,76 @@ def start_training():
     try:
         df = ss['uploaded_df']
         features = ss['features']
-        target = ss['target']
-        if df is not None and features is not None and target is not None:
-            X = df[features].copy()
-            y = df[target].copy()
-            mask = X.notna().all(axis=1) & y.notna()
-            X = X[mask]
-            y = y[mask]
-            train_frac = ss['settings'].get('train_frac', 0.8)
-            from sklearn.model_selection import train_test_split
-            X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=train_frac, random_state=42)
-            st.info(f"DEBUG: X_train: {X_train.shape}, X_val: {X_val.shape}, y_train: {y_train.shape}, y_val: {y_val.shape}")
-            if len(y_val) > 0:
-                st.info(f"DEBUG: First 5 y_val: {y_val.head().tolist()}")
+        model_type = ss.get('model_type')
+        if model_type == 'Clustering':
+            from sklearn.cluster import KMeans
+            from sklearn.metrics import silhouette_score
+            from sklearn.preprocessing import StandardScaler
+            if df is not None and features is not None and len(features) > 0:
+                X = df[features].copy()
+                mask = X.notna().all(axis=1)
+                X = X[mask]
+                scaler = StandardScaler()
+                X_scaled = scaler.fit_transform(X)
+                best_score = -1
+                best_k = 2
+                best_model = None
+                best_labels = None
+                for k in range(2, min(10, len(X_scaled))):
+                    model = KMeans(n_clusters=k, random_state=42)
+                    labels = model.fit_predict(X_scaled)
+                    try:
+                        score = silhouette_score(X_scaled, labels)
+                    except Exception:
+                        score = -1
+                    if score > best_score:
+                        best_score = score
+                        best_k = k
+                        best_model = model
+                        best_labels = labels
+                ss['trained_model'] = best_model
+                ss['cluster_labels'] = best_labels
+                ss['training_status'] = 'done'
+                ss['metrics'] = None
+                ss['training_logs'] = [f'KMeans clustering completed. Optimal clusters: {best_k} (silhouette={best_score:.3f})']
+                ss['clustering_X_scaled'] = X_scaled
+                ss['clustering_scaler'] = scaler
+                ss['clustering_mask'] = mask
+                ss['optimal_n_clusters'] = best_k
             else:
-                st.warning("DEBUG: y_val is empty after split!")
+                ss['training_status'] = 'error'
+                ss['training_logs'] = ['Error: No features selected or data missing.']
+        else:
+            target = ss['target']
+            if df is not None and features is not None and target is not None:
+                X = df[features].copy()
+                y = df[target].copy()
+                mask = X.notna().all(axis=1) & y.notna()
+                X = X[mask]
+                y = y[mask]
+                train_frac = ss['settings'].get('train_frac', 0.8)
+                from sklearn.model_selection import train_test_split
+                X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=train_frac, random_state=42)
+                # ...existing code...
+            else:
+                ss['training_status'] = 'error'
+                ss['training_logs'] = ['Error: Data, features, or target missing.']
     except Exception as e:
-        st.warning(f"DEBUG: Exception during split debug: {e}")
+        ss['training_status'] = 'error'
+        ss['training_logs'] = [f'Error during training: {e}']
 
 
 def step3_training():
     st.header('3 • Training Process')
     ss = st.session_state
-    if ss['training_status'] == 'idle' and ss['uploaded_df'] is None:
-        st.info('No training scheduled. Go to Step 2 and click Start Training.')
+    if ss['training_status'] == 'idle':
         return
     progress_placeholder = st.empty()
-    log_placeholder = st.empty()
     p = progress_placeholder.progress(0)
     logs = []
 
     def log(msg):
         logs.append(msg)
-        log_placeholder.text_area('Logs', value='\n'.join(logs), height=180)
 
     if ss['training_status'] == 'running':
         try:
@@ -910,13 +666,13 @@ def step3_training():
             target = ss['target']
             X = df[features].copy()
             y = df[target].copy()
-            # basic preprocessing: drop rows with NA in selected cols
-            before = len(X)
-            mask = X.notna().all(axis=1) & y.notna()
-            X = X[mask]
-            y = y[mask]
-            after = len(X)
-            log(f'Dropped {before - after} rows with missing values; {after} rows remain.')
+            # Check for missing values and notify user
+            missing_X = X.isna().sum().sum()
+            missing_y = y.isna().sum()
+            if missing_X > 0 or missing_y > 0:
+                st.warning(f"Missing values detected: {missing_X} in features, {missing_y} in target. Please review your data.")
+                log(f"Missing values detected: {missing_X} in features, {missing_y} in target.")
+            # Do not drop or modify data, just notify
             p.progress(20)
             # handle categorical encoding: for simplicity, pd.get_dummies for categorical features
             numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
@@ -937,8 +693,9 @@ def step3_training():
             train_frac = ss['settings'].get('train_frac', 0.8)
             X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=train_frac, random_state=42)
             log(f'Split data: {len(X_train)} train rows, {len(X_val)} validation rows.')
-            log(f'y_train value counts: {y_train.value_counts().to_dict()}')
-            log(f'y_val value counts: {y_val.value_counts().to_dict()}')
+            if ss['model_type'] != 'Regression':
+                log(f'y_train value counts: {y_train.value_counts().to_dict()}')
+                log(f'y_val value counts: {y_val.value_counts().to_dict()}')
             log(f'X_train columns: {list(X_train.columns)}')
             log(f'X_val columns: {list(X_val.columns)}')
             # Store validation data for plotting
@@ -952,26 +709,20 @@ def step3_training():
             alg = ss['settings'].get('algorithm')
             model = None
             if ss['model_type'] == 'Regression':
-                if alg == 'Linear Regression':
+                if alg == 'Linear Regression' or alg is None:
                     model = LinearRegression()
                     log('Fitting Linear Regression...')
-                else:
-                    model = RandomForestRegressor(n_estimators=ss['settings'].get('n_estimators', 100), max_depth=ss['settings'].get('max_depth', None), random_state=42)
-                    log(f'Fitting RandomForestRegressor (n_estimators={ss["settings"].get("n_estimators", 100)})...')
             elif ss['model_type'] == 'Binary classification':
-                if alg == 'Logistic Regression (Binary)':
+                if alg == 'Logistic Regression (Binary)' or alg is None:
                     model = LogisticRegression(C=ss['settings'].get('C', 1.0), max_iter=500, solver='lbfgs')
                     log('Fitting Logistic Regression (Binary)...')
-                else:
-                    model = RandomForestClassifier(n_estimators=ss['settings'].get('n_estimators', 100), max_depth=ss['settings'].get('max_depth', None), random_state=42)
-                    log(f'Fitting RandomForestClassifier (n_estimators={ss["settings"].get("n_estimators", 100)})...')
             else:  # Multi-class classification
-                if alg == 'Logistic Regression (Multi-class)':
+                if alg == 'Logistic Regression (Multi-class)' or alg is None:
                     model = LogisticRegression(C=ss['settings'].get('C', 1.0), max_iter=500, solver='lbfgs')
                     log('Fitting Logistic Regression (Multi-class)...')
-                else:
-                    model = RandomForestClassifier(n_estimators=ss['settings'].get('n_estimators', 100), max_depth=ss['settings'].get('max_depth', None), random_state=42)
-                    log(f'Fitting RandomForestClassifier (n_estimators={ss["settings"].get("n_estimators", 100)})...')
+            if model is None:
+                log('No valid algorithm selected. Defaulting to Linear Regression.')
+                model = LinearRegression()
             p.progress(70)
             # fit
             start = time.time()
@@ -1024,9 +775,9 @@ def step3_training():
             ss['training_status'] = 'error'
             st.error(readable_exception(e))
             log(f'Error during training: {str(e)}')
-    else:
-        st.info('No training in progress. Start training from Step 2.')
+    # else block removed
     st.markdown('---')
+    # Only show the final logs after training, not intermediate logs
     if ss.get('training_logs'):
         st.text_area('Logs', value='\n'.join(ss['training_logs']), height=200)
     if ss.get('training_status') == 'done':
@@ -1034,6 +785,8 @@ def step3_training():
 
 
 def step4_results():
+    import matplotlib.pyplot as plt
+    import numpy as np
     st.header('4 • Training Results')
     ss = st.session_state
     if ss.get('trained_model') is None:
@@ -1077,8 +830,148 @@ def step4_results():
     }
     </style>
     """, unsafe_allow_html=True)
+    if ss['model_type'] == 'Clustering':
+        # Clustering results: show cluster scatter plot and centroid table
+        from sklearn.cluster import KMeans
+        import io
+        import pandas as pd
+        model = ss.get('trained_model')
+        X_scaled = ss.get('clustering_X_scaled')
+        features = ss.get('features')
+        df = ss.get('uploaded_df')
+        # Always get the latest features from session state
+        features = ss.get('features', [])
+        if model is not None and X_scaled is not None and isinstance(features, list) and len(features) >= 2:
+            # --- Clustering Model Performance Metrics ---
+            inertia = getattr(model, 'inertia_', None)
+            n_clusters = ss.get('optimal_n_clusters', getattr(model, 'n_clusters', None))
+            labels = model.labels_ if hasattr(model, 'labels_') else ss.get('cluster_labels')
+            sil_score = None
+            if labels is not None and X_scaled is not None and len(set(labels)) > 1:
+                from sklearn.metrics import silhouette_score
+                try:
+                    sil_score = silhouette_score(X_scaled, labels)
+                except Exception:
+                    sil_score = None
+            st.markdown('<div style="font-weight:600;font-size:1.1rem;margin-bottom:0.7rem;">Model Performance</div>', unsafe_allow_html=True)
+            st.markdown("""
+            <style>
+            .metric-square {
+                background: #fff;
+                border-radius: 10px;
+                border: 1.5px solid #e5e7eb;
+                box-shadow: 0 1px 4px rgba(37,99,235,0.06);
+                min-width: 120px;
+                min-height: 110px;
+                max-width: 160px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto;
+                padding: 0.7rem 0.5rem 0.7rem 0.5rem;
+            }
+            .metric-square .label {
+                color: #64748b;
+                font-size: 0.93rem;
+                font-weight: 500;
+                margin-bottom: 0.2rem;
+                text-align: center;
+                letter-spacing: 0.01em;
+            }
+            .metric-square .value {
+                color: #2563eb;
+                font-size: 1.35rem;
+                font-weight: 700;
+                text-align: center;
+                letter-spacing: 0.01em;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            # Show clustering metrics at the top
+            metric_cols = st.columns(4)
+            with metric_cols[0]:
+                st.markdown(f'<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">clustering</div></div>', unsafe_allow_html=True)
+            with metric_cols[1]:
+                st.markdown(f'<div class="metric-square"><div class="label">CLUSTERS</div><div class="value">{n_clusters if n_clusters is not None else "-"}</div></div>', unsafe_allow_html=True)
+            with metric_cols[2]:
+                inertia_val = f"{inertia:.3f}" if inertia is not None else "-"
+                st.markdown(f'<div class="metric-square"><div class="label">INERTIA</div><div class="value">{inertia_val}</div></div>', unsafe_allow_html=True)
+            with metric_cols[3]:
+                sil_val = f"{sil_score:.3f}" if sil_score is not None else "-"
+                st.markdown(f'<div class="metric-square"><div class="label">SILHOUETTE</div><div class="value">{sil_val}</div></div>', unsafe_allow_html=True)
+            # ...existing chart and table code...
+            from sklearn.decomposition import PCA
+            # If more than 2 features, use PCA for 2D visualization
+            use_pca = False
+            X_plot = X_scaled
+            centers_plot = None
+            xlabel, ylabel = features[0], features[1]
+            if X_scaled.shape[1] > 2:
+                use_pca = True
+                pca = PCA(n_components=2)
+                X_plot = pca.fit_transform(X_scaled)
+                if hasattr(model, 'cluster_centers_'):
+                    centers_plot = pca.transform(model.cluster_centers_)
+                xlabel, ylabel = 'PCA 1', 'PCA 2'
+            else:
+                if hasattr(model, 'cluster_centers_'):
+                    centers_plot = model.cluster_centers_
+            # Make chart 25% larger
+            fig, ax = plt.subplots(figsize=(5.25, 4.0), dpi=180)
+            palette = ["#2563eb", "#0ea5e9", "#facc15", "#f472b6", "#22c55e", "#eab308", "#a21caf", "#f43f5e", "#14b8a6", "#64748b"]
+            for i, cluster_id in enumerate(sorted(set(labels))):
+                mask_c = labels == cluster_id
+                color = palette[i % len(palette)]
+                ax.scatter(X_plot[mask_c, 0], X_plot[mask_c, 1], s=38, facecolors='none', edgecolors=color, linewidths=1.2, alpha=0.85, label=f'Cluster {cluster_id}', marker='o', zorder=2)
+            # Centroids
+            if centers_plot is not None:
+                ax.scatter(centers_plot[:, 0], centers_plot[:, 1], s=110, facecolors='none', edgecolors='#ef4444', marker='X', linewidths=2.5, label='Centroids', zorder=10)
+                for idx, (cx, cy) in enumerate(centers_plot):
+                    ax.text(cx, cy, str(idx), color='#ef4444', fontsize=12, fontweight='bold', ha='center', va='center', zorder=11)
+            ax.set_xlabel(xlabel, fontsize=13, labelpad=2)
+            ax.set_ylabel(ylabel, fontsize=13, labelpad=2)
+            ax.set_title('KMeans Clustering Results', fontsize=15, pad=8)
+            # Move legend to right of chart
+            ax.legend(fontsize=9, loc='center left', bbox_to_anchor=(1.02, 0.5), frameon=True)
+            ax.tick_params(axis='both', labelsize=11)
+            ax.grid(True, linestyle=':', alpha=0.35)
+            fig.tight_layout(pad=0.2)
+            buf = io.BytesIO()
+            fig.savefig(buf, format="svg", bbox_inches="tight")
+            plt.close(fig)
+            svg = buf.getvalue().decode("utf-8")
+            if use_pca:
+                st.info('More than two features selected: PCA is used to project the data into 2D for visualization. Clustering is still performed in the full feature space.')
+            st.markdown(f"<div style='width:100%;text-align:center'>{svg}</div>", unsafe_allow_html=True)
+            # Data table grouped by cluster with centroid numbers
+            if df is not None and labels is not None:
+                df_table = df.copy()
+                df_table['Cluster'] = labels
+                st.markdown('<div style="margin-top:1.2em;margin-bottom:0.3em;font-weight:600;font-size:1.08rem;">Cluster Assignments</div>', unsafe_allow_html=True)
+                st.dataframe(df_table.sort_values('Cluster'), use_container_width=True)
+            # Centroid coordinates table
+            if centers_plot is not None:
+                if use_pca:
+                    centroid_df = pd.DataFrame(centers_plot, columns=["PCA 1", "PCA 2"])
+                else:
+                    centroid_df = pd.DataFrame(centers_plot, columns=[f"{f} (scaled)" for f in features])
+                centroid_df.index.name = "Centroid #"
+                st.markdown('<div style="margin-top:1.2em;margin-bottom:0.3em;font-weight:600;font-size:1.08rem;">Centroid Coordinates</div>', unsafe_allow_html=True)
+                st.dataframe(centroid_df, use_container_width=True)
+            # --- Data Integrity & Correlation Section for Clustering ---
+            # Data Integrity & Correlation table removed for clustering, as correlation with cluster labels is not meaningful.
+        else:
+            st.info('Not enough features to plot clusters. Select at least 2 features.')
     if ss['model_type'] == 'Regression':
         cols = st.columns(7)
+        def safe_metric(val, fmt=".3f"):
+            try:
+                if val is None:
+                    return "-"
+                return f"{val:{fmt}}"
+            except Exception:
+                return "-"
         with cols[0]:
             st.markdown('<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">regression</div></div>', unsafe_allow_html=True)
         with cols[1]:
@@ -1086,15 +979,22 @@ def step4_results():
         with cols[2]:
             st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(ss["features"])} </div></div>', unsafe_allow_html=True)
         with cols[3]:
-            st.markdown(f'<div class="metric-square"><div class="label">MEAN ABSOLUTE ERROR</div><div class="value">{metrics.get("MAE"):.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">MEAN ABSOLUTE ERROR</div><div class="value">{safe_metric(metrics.get("MAE"))}</div></div>', unsafe_allow_html=True)
         with cols[4]:
-            st.markdown(f'<div class="metric-square"><div class="label">MEAN SQUARED ERROR</div><div class="value">{metrics.get("MSE"):.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">MEAN SQUARED ERROR</div><div class="value">{safe_metric(metrics.get("MSE"))}</div></div>', unsafe_allow_html=True)
         with cols[5]:
-            st.markdown(f'<div class="metric-square"><div class="label">ROOT MEAN SQUARED ERROR</div><div class="value">{metrics.get("MSE")**0.5:.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">ROOT MEAN SQUARED ERROR</div><div class="value">{safe_metric(metrics.get("MSE")**0.5 if metrics.get("MSE") is not None else None)}</div></div>', unsafe_allow_html=True)
         with cols[6]:
-            st.markdown(f'<div class="metric-square"><div class="label">R² SCORE</div><div class="value">{metrics.get("R2"):.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">R² SCORE</div><div class="value">{safe_metric(metrics.get("R2"))}</div></div>', unsafe_allow_html=True)
     else:
         cols = st.columns(7)
+        def safe_metric(val, fmt=".3f"):
+            try:
+                if val is None:
+                    return "-"
+                return f"{val:{fmt}}"
+            except Exception:
+                return "-"
         with cols[0]:
             st.markdown('<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">classification</div></div>', unsafe_allow_html=True)
         with cols[1]:
@@ -1102,82 +1002,86 @@ def step4_results():
         with cols[2]:
             st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(ss["features"])} </div></div>', unsafe_allow_html=True)
         with cols[3]:
-            st.markdown(f'<div class="metric-square"><div class="label">ACCURACY</div><div class="value">{metrics.get("accuracy"):.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">ACCURACY</div><div class="value">{safe_metric(metrics.get("accuracy"))}</div></div>', unsafe_allow_html=True)
         with cols[4]:
-            st.markdown(f'<div class="metric-square"><div class="label">PRECISION (MACRO)</div><div class="value">{metrics.get("precision"):.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">PRECISION (MACRO)</div><div class="value">{safe_metric(metrics.get("precision"))}</div></div>', unsafe_allow_html=True)
         with cols[5]:
-            st.markdown(f'<div class="metric-square"><div class="label">RECALL (MACRO)</div><div class="value">{metrics.get("recall"):.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">RECALL (MACRO)</div><div class="value">{safe_metric(metrics.get("recall"))}</div></div>', unsafe_allow_html=True)
         with cols[6]:
-            st.markdown(f'<div class="metric-square"><div class="label">F1 (MACRO)</div><div class="value">{metrics.get("f1"):.3f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">F1 (MACRO)</div><div class="value">{safe_metric(metrics.get("f1"))}</div></div>', unsafe_allow_html=True)
 
     # --- Keep the rest of the visuals and plots as before ---
     if ss['model_type'] == 'Regression':
+        # Regression charts only
+        import matplotlib.pyplot as plt
+        import io
         df = ss['uploaded_df']
         features = ss['features']
         target = ss['target']
-        if ss.get('_y_val') is not None and ss.get('_X_val') is not None:
-            y_val = ss['_y_val']
-            X_val = ss['_X_val']
-            try:
-                y_pred = ss['trained_model'].predict(X_val)
-                # Display both plots side by side
-                plot_cols = st.columns(2)
-                with plot_cols[0]:
-                    import io
-                    fig, ax = plt.subplots(figsize=(4, 3), dpi=180)
-                    ax.scatter(
-                        range(len(y_val)), y_val - y_pred,
-                        alpha=0.9, s=32,
-                        facecolors='none', edgecolors='#2563eb', linewidths=1.5
-                    )
-                    ax.axhline(0, color='k', linewidth=1.2)
-                    ax.set_title('Residuals', fontsize=18)
-                    ax.set_xlabel('Sample Index', fontsize=14)
-                    ax.set_ylabel('Residual (y_true - y_pred)', fontsize=14)
-                    ax.tick_params(axis='both', labelsize=12)
-                    fig.tight_layout(pad=0.2)
-                    buf = io.BytesIO()
-                    fig.savefig(buf, format="svg", bbox_inches="tight")
-                    plt.close(fig)
-                    svg = buf.getvalue().decode("utf-8")
-                    st.markdown(f"""<div style='width:100%;text-align:center'>{svg}</div>""", unsafe_allow_html=True)
-                with plot_cols[1]:
-                    import io
-                    fig2, ax2 = plt.subplots(figsize=(4, 3), dpi=180)
-                    ax2.scatter(
-                        y_val, y_pred,
-                        alpha=0.9, s=32,
-                        facecolors='none', edgecolors='#2563eb', linewidths=1.5
-                    )
-                    ax2.plot([y_val.min(), y_val.max()], [y_val.min(), y_val.max()], 'r--', lw=2.0)
-                    ax2.set_title('True vs Predicted', fontsize=18)
-                    ax2.set_xlabel('True Values', fontsize=14)
-                    ax2.set_ylabel('Predicted Values', fontsize=14)
-                    ax2.tick_params(axis='both', labelsize=12)
-                    fig2.tight_layout(pad=0.2)
-                    buf2 = io.BytesIO()
-                    fig2.savefig(buf2, format="svg", bbox_inches="tight")
-                    plt.close(fig2)
-                    svg2 = buf2.getvalue().decode("utf-8")
-                    st.markdown(f"""<div style='width:100%;text-align:center'>{svg2}</div>""", unsafe_allow_html=True)
-            except Exception as e:
-                st.warning(f"Could not plot regression charts: {e}")
-        else:
-            st.info("No validation data available for plotting charts. If you see this message and have enough data, please report it.")
-    else:
-        # Visuals for classification
+        if df is not None and features is not None and target is not None:
+            import pandas as pd
+            st.markdown('<div style="margin-top:1.2em;margin-bottom:0.3em;font-weight:600;font-size:1.08rem;">Regression Results</div>', unsafe_allow_html=True)
+            # Encode features to match training columns
+            X_encoded = pd.get_dummies(df[features], drop_first=True)
+            training_columns = ss.get('training_columns', X_encoded.columns)
+            X_encoded = X_encoded.reindex(columns=training_columns, fill_value=0)
+            y_true = df[target].values
+            y_pred = ss['trained_model'].predict(X_encoded)
+            # Show predicted value (first sample) in blue and bold
+            st.markdown(f"<span style='font-size:1.1em;font-weight:600;'>Predicted Value (first row): <span style='color:#2563eb;font-weight:700;'>{y_pred[0]:.3f}</span></span>", unsafe_allow_html=True)
+            # Prepare plots side-by-side using validation set
+            col1, col2 = st.columns(2)
+            X_val = ss.get('_X_val')
+            y_val = ss.get('_y_val')
+            if X_val is not None and y_val is not None:
+                y_pred_val = ss['trained_model'].predict(X_val)
+                # Residuals plot: y_val - y_pred_val vs sample index
+                residuals = y_val - y_pred_val
+                with col1:
+                    fig_res, ax_res = plt.subplots(figsize=(5, 4), dpi=180)
+                    ax_res.scatter(np.arange(len(residuals)), residuals, color='#2563eb', alpha=0.7, edgecolors='#2563eb', facecolors='none', marker='o')
+                    ax_res.axhline(0, color='black', linestyle='-', linewidth=1)
+                    ax_res.set_xlabel('Sample Index')
+                    ax_res.set_ylabel('Residual (y_true - y_pred)')
+                    ax_res.set_title('Residuals')
+                    fig_res.tight_layout(pad=0.2)
+                    buf_res = io.BytesIO()
+                    fig_res.savefig(buf_res, format="svg", bbox_inches="tight")
+                    plt.close(fig_res)
+                    svg_res = buf_res.getvalue().decode("utf-8")
+                    st.markdown(f"<div style='width:100%;text-align:center'>{svg_res}</div>", unsafe_allow_html=True)
+                # True vs Predicted plot: scatter + y=x red dashed line
+                with col2:
+                    fig_tp, ax_tp = plt.subplots(figsize=(5, 4), dpi=180)
+                    ax_tp.scatter(y_val, y_pred_val, color='#2563eb', alpha=0.7, edgecolors='#2563eb', facecolors='none', marker='o')
+                    # y=x reference line
+                    min_val = np.min(y_val)
+                    max_val = np.max(y_val)
+                    ax_tp.plot([min_val, max_val], [min_val, max_val], color='red', linestyle='--', linewidth=2)
+                    ax_tp.set_xlim(min_val, max_val)
+                    ax_tp.set_ylim(min_val, max_val)
+                    ax_tp.set_xlabel('True Values')
+                    ax_tp.set_ylabel('Predicted Values')
+                    ax_tp.set_title('True vs Predicted')
+                    fig_tp.tight_layout(pad=0.2)
+                    buf_tp = io.BytesIO()
+                    fig_tp.savefig(buf_tp, format="svg", bbox_inches="tight")
+                    plt.close(fig_tp)
+                    svg_tp = buf_tp.getvalue().decode("utf-8")
+                    st.markdown(f"<div style='width:100%;text-align:center'>{svg_tp}</div>", unsafe_allow_html=True)
+            else:
+                st.warning('Validation data not available for plotting. Please retrain the model.')
+    elif ss['model_type'] in ('Binary classification', 'Multi-class classification'):
+        # Show confusion matrix and ROC curve for binary, confusion matrix for multi-class
         if ss.get('_y_val') is not None:
             y_val = ss['_y_val']
-            # Use the same X_val as in validation
             X_val = ss.get('_X_val')
             if X_val is not None:
                 y_pred = ss['trained_model'].predict(X_val)
             else:
                 y_pred = ss['trained_model'].predict(pd.get_dummies(ss['uploaded_df'][ss['features']].dropna(), drop_first=True))[:len(y_val)]
-            # Confusion matrix
             from sklearn.metrics import ConfusionMatrixDisplay
-            # Show confusion matrix and ROC curve side by side for binary classification
-            if hasattr(ss['trained_model'], 'predict_proba') and ss.get('_y_proba') is not None and len(set(y_val)) == 2:
+            if ss['model_type'] == 'Binary classification' and hasattr(ss['trained_model'], 'predict_proba') and ss.get('_y_proba') is not None and len(set(y_val)) == 2:
                 y_proba = ss['_y_proba']
                 fpr, tpr, _ = roc_curve(y_val, y_proba[:, 1])
                 roc_auc = auc(fpr, tpr)
@@ -1220,49 +1124,83 @@ def step4_results():
                     svg2 = buf2.getvalue().decode("utf-8")
                     st.markdown(f"""<div style='width:100%;text-align:center'>{svg2}</div>""", unsafe_allow_html=True)
             else:
-                # Only one confusion matrix for multi-class, compact and clear
-                if ss.get('model_type') == 'Multi-class classification':
-                    # Try to use class names if available
-                    class_labels = None
-                    if hasattr(ss['trained_model'], 'classes_'):
-                        class_labels = ss['trained_model'].classes_
-                    import io
-                    fig, ax = plt.subplots(figsize=(3, 2.5), dpi=150)
-                    disp = ConfusionMatrixDisplay.from_predictions(
-                        y_val, y_pred,
-                        display_labels=class_labels,
-                        cmap=plt.cm.Blues,
-                        ax=ax,
-                        colorbar=True,
-                        values_format='.2g'
-                    )
-                    ax.set_title('Confusion Matrix', fontsize=9, pad=5)
-                    ax.set_xlabel('Predicted label', fontsize=8, labelpad=4)
-                    ax.set_ylabel('True label', fontsize=8, labelpad=4)
-                    ax.tick_params(axis='both', labelsize=7, length=2)
+                # Multi-class or fallback confusion matrix
+                class_labels = None
+                if hasattr(ss['trained_model'], 'classes_'):
+                    class_labels = ss['trained_model'].classes_
+                import io
+                fig, ax = plt.subplots(figsize=(3, 2.5), dpi=150)
+                disp = ConfusionMatrixDisplay.from_predictions(
+                    y_val, y_pred,
+                    display_labels=class_labels,
+                    cmap=plt.cm.Blues,
+                    ax=ax,
+                    colorbar=True,
+                    values_format='.2g' if ss['model_type'] == 'Multi-class classification' else None
+                )
+                # Fix tick mismatch error
+                n_labels = len(class_labels) if class_labels is not None else 0
+                ax.set_xticks(range(n_labels))
+                ax.set_yticks(range(n_labels))
+                ax.set_title('Confusion Matrix', fontsize=9 if ss['model_type'] == 'Multi-class classification' else 12, pad=5)
+                ax.set_xlabel('Predicted label', fontsize=8 if ss['model_type'] == 'Multi-class classification' else 10, labelpad=4)
+                ax.set_ylabel('True label', fontsize=8 if ss['model_type'] == 'Multi-class classification' else 10, labelpad=4)
+                ax.tick_params(axis='both', labelsize=7 if ss['model_type'] == 'Multi-class classification' else 9, length=2)
+                if ss['model_type'] == 'Multi-class classification':
                     cb = ax.figure.axes[-1]
                     cb.tick_params(labelsize=7, length=2)
                     fig.tight_layout(pad=0.5)
-                    buf = io.BytesIO()
-                    fig.savefig(buf, format='png', bbox_inches='tight')
-                    plt.close(fig)
-                    buf.seek(0)
-                    st.image(buf)
                 else:
-                    fig, ax = plt.subplots(figsize=(3, 2.5), dpi=150)
-                    disp = ConfusionMatrixDisplay.from_predictions(
-                        y_val, y_pred,
-                        cmap=plt.cm.Blues,
-                        ax=ax,
-                        colorbar=True
-                    )
-                    ax.set_title('Confusion Matrix', fontsize=12)
-                    ax.set_xlabel('Predicted label', fontsize=10)
-                    ax.set_ylabel('True label', fontsize=10)
-                    ax.tick_params(axis='both', labelsize=9)
                     fig.tight_layout()
-                    st.pyplot(fig)
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png', bbox_inches='tight')
+                plt.close(fig)
+                buf.seek(0)
+                st.image(buf)
     # Removed Model artifacts and download buttons as requested
+
+    # --- Data Integrity & Correlation Section ---
+    ss = st.session_state
+    if ss.get('model_type') in ['Regression', 'Binary classification', 'Multi-class classification'] and ss.get('uploaded_df') is not None:
+        st.markdown('---')
+        st.markdown('## Data Integrity & Correlation')
+        import pandas as pd
+        import numpy as np
+        df_corr = pd.get_dummies(ss['uploaded_df'], drop_first=False)
+        selected_features = ss.get('features', [])
+        target = ss.get('target')
+        corr_data = []
+        for feature in selected_features:
+            # Numeric feature: use original column
+            if feature in ss['uploaded_df'].select_dtypes(include=[np.number]).columns:
+                try:
+                    corr = abs(np.corrcoef(ss['uploaded_df'][feature], ss['uploaded_df'][target])[0, 1])
+                except Exception:
+                    corr = 0.0
+            else:
+                # Categorical: use max correlation of one-hot columns
+                onehot_cols = [col for col in df_corr.columns if col.startswith(feature + '_')]
+                if onehot_cols:
+                    try:
+                        corrs = [abs(np.corrcoef(df_corr[col], df_corr[target])[0, 1]) for col in onehot_cols]
+                        corr = max(corrs)
+                    except Exception:
+                        corr = 0.0
+                else:
+                    corr = 0.0
+            pct_impact = f"{corr*100:.1f}%"
+            if corr > 0.7:
+                comment = 'Strong direct impact on target.'
+            elif corr > 0.3:
+                comment = 'Moderate influence; may be useful.'
+            elif corr < 0.1:
+                comment = 'Acts as noise; little effect.'
+            else:
+                comment = 'Weak/uncertain effect.'
+            corr_data.append({'Feature': feature, 'Max Correlation': pct_impact, 'Comment': comment})
+        corr_df = pd.DataFrame(corr_data).sort_values('Max Correlation', ascending=False)
+        st.markdown('### Feature Correlation & Impact Table')
+        st.dataframe(corr_df[['Feature', 'Max Correlation', 'Comment']], use_container_width=True)
 
 
 def step5_test():
@@ -1314,31 +1252,7 @@ def step5_test():
                 st.write(proba[0].tolist())
         except Exception as e:
             st.error(readable_exception(e))
-    st.markdown('---')
-    st.subheader('Batch predictions')
-    batch_file = st.file_uploader('Upload CSV for batch predictions', type=['csv'])
-    if batch_file is not None:
-        try:
-            bdf = pd.read_csv(batch_file)
-            Xb = bdf[features]
-            # basic processing
-            if ss['settings'].get('scale', True):
-                scaler = ss['settings'].get('_scaler')
-                num_cols = [c for c in Xb.columns if pd.api.types.is_numeric_dtype(Xb[c])]
-                if scaler and num_cols:
-                    Xb[num_cols] = scaler.transform(Xb[num_cols])
-            Xb = pd.get_dummies(Xb, drop_first=True)
-            # align columns with training columns if available
-            trained_cols = ss.get('training_columns')
-            if trained_cols is not None:
-                Xb = Xb.reindex(columns=trained_cols, fill_value=0)
-            preds = ss['trained_model'].predict(Xb)
-            bdf['prediction'] = preds
-            st.dataframe(bdf.head(20))
-            csv_bytes = bdf.to_csv(index=False).encode('utf-8')
-            st.download_button('Download predictions CSV', data=csv_bytes, file_name='predictions.csv')
-        except Exception as e:
-            st.error(readable_exception(e))
+    # Batch predictions feature removed
 
 
 
@@ -1389,21 +1303,22 @@ def main():
                 height=0,
         )
     sidebar_steps()
-    show_help_slider()  # Show the floating help slider
+    # Help slider removed
     step = st.session_state['step']
     if step == 1:
         step1_model_and_data()
     elif step == 2:
         step2_settings()
     elif step == 3:
+        # Start training automatically when entering Training step
+        start_training()
         step3_training()
     elif step == 4:
         step4_results()
     elif step == 5:
         step5_test()
-    elif step == 'cv':
-        computer_vision_ui()
+    # CV step and computer_vision_ui removed
 
 
 if __name__ == '__main__':
-    main()
+    _run_with_streamlit_if_needed()
