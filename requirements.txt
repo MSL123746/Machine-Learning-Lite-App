@@ -1,0 +1,13 @@
+streamlit
+pandas
+numpy
+scikit-learn
+matplotlib
+streamlit-aggrid
+joblib
+seaborn
+openpyxl
+xlrd
+pyarrow
+altair
+plotly
