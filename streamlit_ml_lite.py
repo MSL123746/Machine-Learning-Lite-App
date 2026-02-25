@@ -350,15 +350,15 @@ def sidebar_steps():
             ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
             ('Stage 2', 'Split Data', 'Select train fraction and algorithm settings.'),
             ('Stage 3', 'Training', 'Start training and view logs/progress.'),
-            ('Stage 4', 'Results', 'Inspect metrics and download model.'),
+            ('Stage 4', 'Scoring', 'Inspect metrics and download model.'),
         ]
     else:
         steps = [
             ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
             ('Stage 2', 'Split Data', 'Select train fraction and algorithm settings.'),
             ('Stage 3', 'Training', 'Start training and view logs/progress.'),
-            ('Stage 4', 'Results', 'Inspect metrics and download model.'),
-            ('Stage 5', 'Test Model', 'Make single or batch predictions.'),
+            ('Stage 4', 'Scoring', 'Inspect metrics and download model.'),
+            ('Stage 5', 'Evaluate', 'Make single or batch predictions.'),
         ]
 
     def set_step(idx):
@@ -390,7 +390,7 @@ def sidebar_steps():
     # All computer vision, DummyClassifier, and test_gray code removed2
 
 def step1_model_and_data():
-    st.header('Welcome to the Machine Learning Simulator 02092026')
+    st.header('Welcome to the Machine Learning Training Simulator')
     ss = st.session_state
     # ...existing code...
     col1, col2 = st.columns([2, 5])
@@ -889,15 +889,17 @@ def step4_results():
             </style>
             """, unsafe_allow_html=True)
             # Show clustering metrics at the top
-            metric_cols = st.columns(4)
+            metric_cols = st.columns(5)
             with metric_cols[0]:
                 st.markdown(f'<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">clustering</div></div>', unsafe_allow_html=True)
             with metric_cols[1]:
-                st.markdown(f'<div class="metric-square"><div class="label">CLUSTERS</div><div class="value">{n_clusters if n_clusters is not None else "-"}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-square"><div class="label">TRAINING SAMPLES</div><div class="value">{len(ss["uploaded_df"])} </div></div>', unsafe_allow_html=True)
             with metric_cols[2]:
+                st.markdown(f'<div class="metric-square"><div class="label">CLUSTERS</div><div class="value">{n_clusters if n_clusters is not None else "-"}</div></div>', unsafe_allow_html=True)
+            with metric_cols[3]:
                 inertia_val = f"{inertia:.3f}" if inertia is not None else "-"
                 st.markdown(f'<div class="metric-square"><div class="label">INERTIA</div><div class="value">{inertia_val}</div></div>', unsafe_allow_html=True)
-            with metric_cols[3]:
+            with metric_cols[4]:
                 sil_val = f"{sil_score:.3f}" if sil_score is not None else "-"
                 st.markdown(f'<div class="metric-square"><div class="label">SILHOUETTE</div><div class="value">{sil_val}</div></div>', unsafe_allow_html=True)
             # ...existing chart and table code...
@@ -987,28 +989,7 @@ def step4_results():
         with cols[6]:
             st.markdown(f'<div class="metric-square"><div class="label">R² SCORE</div><div class="value">{safe_metric(metrics.get("R2"))}</div></div>', unsafe_allow_html=True)
     else:
-        cols = st.columns(7)
-        def safe_metric(val, fmt=".3f"):
-            try:
-                if val is None:
-                    return "-"
-                return f"{val:{fmt}}"
-            except Exception:
-                return "-"
-        with cols[0]:
-            st.markdown('<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">classification</div></div>', unsafe_allow_html=True)
-        with cols[1]:
-            st.markdown(f'<div class="metric-square"><div class="label">TRAINING SAMPLES</div><div class="value">{len(ss["uploaded_df"])} </div></div>', unsafe_allow_html=True)
-        with cols[2]:
-            st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(ss["features"])} </div></div>', unsafe_allow_html=True)
-        with cols[3]:
-            st.markdown(f'<div class="metric-square"><div class="label">ACCURACY</div><div class="value">{safe_metric(metrics.get("accuracy"))}</div></div>', unsafe_allow_html=True)
-        with cols[4]:
-            st.markdown(f'<div class="metric-square"><div class="label">PRECISION (MACRO)</div><div class="value">{safe_metric(metrics.get("precision"))}</div></div>', unsafe_allow_html=True)
-        with cols[5]:
-            st.markdown(f'<div class="metric-square"><div class="label">RECALL (MACRO)</div><div class="value">{safe_metric(metrics.get("recall"))}</div></div>', unsafe_allow_html=True)
-        with cols[6]:
-            st.markdown(f'<div class="metric-square"><div class="label">F1 (MACRO)</div><div class="value">{safe_metric(metrics.get("f1"))}</div></div>', unsafe_allow_html=True)
+        pass  # No metrics to display for this case
 
     # --- Keep the rest of the visuals and plots as before ---
     if ss['model_type'] == 'Regression':
