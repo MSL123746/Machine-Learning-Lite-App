@@ -390,7 +390,7 @@ def sidebar_steps():
     # All computer vision, DummyClassifier, and test_gray code removed2
 
 def step1_model_and_data():
-    st.header('Welcome to the Machine Learning Training Simulator')
+    st.header('Welcome to the Machine Learning Training Simulator (2026 Edition)')
     ss = st.session_state
     # ...existing code...
     col1, col2 = st.columns([2, 5])
@@ -1053,6 +1053,29 @@ def step4_results():
             else:
                 st.warning('Validation data not available for plotting. Please retrain the model.')
     elif ss['model_type'] in ('Binary classification', 'Multi-class classification'):
+        # Show classification metrics at the top
+        cols = st.columns(7)
+        def safe_metric(val, fmt=".3f"):
+            try:
+                if val is None:
+                    return "-"
+                return f"{val:{fmt}}"
+            except Exception:
+                return "-"
+        with cols[0]:
+            st.markdown('<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">classification</div></div>', unsafe_allow_html=True)
+        with cols[1]:
+            st.markdown(f'<div class="metric-square"><div class="label">TRAINING SAMPLES</div><div class="value">{len(ss["uploaded_df"])} </div></div>', unsafe_allow_html=True)
+        with cols[2]:
+            st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(ss["features"])} </div></div>', unsafe_allow_html=True)
+        with cols[3]:
+            st.markdown(f'<div class="metric-square"><div class="label">ACCURACY</div><div class="value">{safe_metric(metrics.get("accuracy"))}</div></div>', unsafe_allow_html=True)
+        with cols[4]:
+            st.markdown(f'<div class="metric-square"><div class="label">PRECISION (MACRO)</div><div class="value">{safe_metric(metrics.get("precision"))}</div></div>', unsafe_allow_html=True)
+        with cols[5]:
+            st.markdown(f'<div class="metric-square"><div class="label">RECALL (MACRO)</div><div class="value">{safe_metric(metrics.get("recall"))}</div></div>', unsafe_allow_html=True)
+        with cols[6]:
+            st.markdown(f'<div class="metric-square"><div class="label">F1 (MACRO)</div><div class="value">{safe_metric(metrics.get("f1"))}</div></div>', unsafe_allow_html=True)
         # Show confusion matrix and ROC curve for binary, confusion matrix for multi-class
         if ss.get('_y_val') is not None:
             y_val = ss['_y_val']
