@@ -390,7 +390,7 @@ def sidebar_steps():
     # All computer vision, DummyClassifier, and test_gray code removed2
 
 def step1_model_and_data():
-    st.header('Welcome to the Machine Learning Training Simulator (2026 Edition)')
+    st.header('Welcome to the Machine Learning Training Simulator (2026 Edition v1.0)')
     ss = st.session_state
     # ...existing code...
     col1, col2 = st.columns([2, 5])
@@ -1009,7 +1009,6 @@ def step4_results():
             y_true = df[target].values
             y_pred = ss['trained_model'].predict(X_encoded)
             # Show predicted value (first sample) in blue and bold
-            st.markdown(f"<span style='font-size:1.1em;font-weight:600;'>Predicted Value (first row): <span style='color:#2563eb;font-weight:700;'>{y_pred[0]:.3f}</span></span>", unsafe_allow_html=True)
             # Prepare plots side-by-side using validation set
             col1, col2 = st.columns(2)
             X_val = ss.get('_X_val')
