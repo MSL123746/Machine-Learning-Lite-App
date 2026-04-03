@@ -390,7 +390,7 @@ def sidebar_steps():
     # All computer vision, DummyClassifier, and test_gray code removed2
 
 def step1_model_and_data():
-    st.header('Welcome to the Machine Learning Training Simulator (2026 Edition v1.0)')
+    st.header('Welcome to the Machine Learning Training Simulator (2026 Edition)')
     ss = st.session_state
     # ...existing code...
     col1, col2 = st.columns([2, 5])
@@ -435,7 +435,10 @@ def step1_model_and_data():
             st.button('Reset', on_click=reset_selections, help='Clear uploaded data and start over')
         # If reset, hide selectors and data preview
         if ss.get('uploaded_df') is not None:
-            df = ss['df_sample']
+            df = ss.get('df_sample')
+            if df is None or getattr(df, 'empty', False):
+                df = ss['uploaded_df']
+                ss['df_sample'] = df.copy()
 
             # --- Feature/target selection logic (restored) ---
             def is_valid_feature_select(col):
@@ -451,8 +454,31 @@ def step1_model_and_data():
             if prev_features is None:
                 prev_features = []
             safe_defaults = [f for f in prev_features if f in cols]
+
+            select_all_label = 'Select All'
+
+            if 'feature_select_ui' not in st.session_state:
+                st.session_state['feature_select_ui'] = safe_defaults
+            else:
+                current_feature_selection = st.session_state.get('feature_select_ui', [])
+                st.session_state['feature_select_ui'] = [
+                    f for f in current_feature_selection
+                    if f == select_all_label or f in cols
+                ]
+                if not st.session_state['feature_select_ui'] and safe_defaults:
+                    st.session_state['feature_select_ui'] = safe_defaults
+
+            if st.session_state.pop('select_all_features_pending', False):
+                st.session_state['feature_select_ui'] = cols.copy()
+
+            feature_options = [select_all_label] + cols
+
             if ss['model_type'] == 'Clustering':
-                features = st.multiselect('Select feature columns', options=cols, default=safe_defaults, key='feature_select')
+                selected_features = st.multiselect('Select feature columns', options=feature_options, key='feature_select_ui')
+                if select_all_label in selected_features:
+                    st.session_state['select_all_features_pending'] = True
+                    st.rerun()
+                features = [f for f in st.session_state.get('feature_select_ui', []) if f in cols]
                 ss['features'] = features
                 ss['target'] = None
                 if features:
@@ -490,7 +516,11 @@ def step1_model_and_data():
                     )
                 target_cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_target_select(c)]
                 target = st.selectbox('Select target column', options=["Select a target..."] + target_cols, index=0, key='target_select')
-                features = st.multiselect('Select feature columns', options=cols, default=safe_defaults, key='feature_select')
+                selected_features = st.multiselect('Select feature columns', options=feature_options, key='feature_select_ui')
+                if select_all_label in selected_features:
+                    st.session_state['select_all_features_pending'] = True
+                    st.rerun()
+                features = [f for f in st.session_state.get('feature_select_ui', []) if f in cols]
                 selected_target = st.session_state.get('target_select')
                 if selected_target is not None and selected_target != "Select a target..." and str(selected_target).strip() != '':
                     ss['target'] = selected_target
@@ -524,15 +554,27 @@ def step1_model_and_data():
             # --- Always show Data Preview after upload ---
             st.markdown('---')
             st.subheader('Data Preview')
-            # Always show the original uploaded DataFrame, not filtered by features
-            preview_df = ss['uploaded_df'] if 'uploaded_df' in ss and ss['uploaded_df'] is not None else df
+            preview_df = ss.get('df_sample')
+            if preview_df is None or getattr(preview_df, 'empty', False):
+                preview_df = ss.get('uploaded_df')
+
             if preview_df is not None and not preview_df.empty:
-                gb = GridOptionsBuilder.from_dataframe(preview_df)
-                gb.configure_default_column(enablePivot=True, enableValue=True, enableRowGroup=True)
-                gb.configure_side_bar()
-                gb.configure_grid_options(domLayout='normal')
-                grid_options = gb.build()
-                AgGrid(preview_df, gridOptions=grid_options, height=600, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
+                try:
+                    gb = GridOptionsBuilder.from_dataframe(preview_df)
+                    gb.configure_default_column(enablePivot=True, enableValue=True, enableRowGroup=True)
+                    gb.configure_side_bar()
+                    gb.configure_grid_options(domLayout='normal')
+                    grid_options = gb.build()
+                    AgGrid(
+                        preview_df,
+                        gridOptions=grid_options,
+                        height=600,
+                        enable_enterprise_modules=False,
+                        fit_columns_on_grid_load=True,
+                    )
+                except Exception:
+                    st.caption('Interactive grid unavailable in this environment. Showing standard preview instead.')
+                    st.dataframe(preview_df, use_container_width=True, height=600)
             else:
                 st.info('No data to preview.')
             st.markdown('---')
@@ -1075,6 +1117,28 @@ def step4_results():
             st.markdown(f'<div class="metric-square"><div class="label">RECALL (MACRO)</div><div class="value">{safe_metric(metrics.get("recall"))}</div></div>', unsafe_allow_html=True)
         with cols[6]:
             st.markdown(f'<div class="metric-square"><div class="label">F1 (MACRO)</div><div class="value">{safe_metric(metrics.get("f1"))}</div></div>', unsafe_allow_html=True)
+
+        # --- Download button for classification models ---
+        download_cols = st.columns([2,1])
+        with download_cols[1]:
+            import pickle
+            model = ss.get('trained_model')
+            scaler = ss['settings'].get('_scaler')
+            bundle = {"model": model, "scaler": scaler}
+            bundle_bytes = pickle.dumps(bundle)
+            # Determine algorithm name for file
+            alg = ss.get('algorithm', '')
+            if not alg:
+                alg = type(model).__name__
+            # Clean up name for file
+            file_alg = alg.replace(' ', '').replace('(', '').replace(')', '')
+            st.download_button(
+                label="Download the Model",
+                data=bundle_bytes,
+                file_name=f"{file_alg}Model.pkl",
+                mime="application/octet-stream",
+                help="Download the trained model and scaler as a .pkl file."
+            )
         # Show confusion matrix and ROC curve for binary, confusion matrix for multi-class
         if ss.get('_y_val') is not None:
             y_val = ss['_y_val']
@@ -1160,7 +1224,27 @@ def step4_results():
                 plt.close(fig)
                 buf.seek(0)
                 st.image(buf)
-    # Removed Model artifacts and download buttons as requested
+
+    elif ss['model_type'] == 'Clustering':
+        # --- Download button for clustering models ---
+        download_cols = st.columns([2,1])
+        with download_cols[1]:
+            import pickle
+            model = ss.get('trained_model')
+            scaler = ss['settings'].get('_scaler')
+            bundle = {"model": model, "scaler": scaler}
+            bundle_bytes = pickle.dumps(bundle)
+            alg = ss.get('algorithm', '')
+            if not alg:
+                alg = type(model).__name__
+            file_alg = alg.replace(' ', '').replace('(', '').replace(')', '')
+            st.download_button(
+                label="Download the Model",
+                data=bundle_bytes,
+                file_name=f"{file_alg}Model.pkl",
+                mime="application/octet-stream",
+                help="Download the trained model and scaler as a .pkl file."
+            )
 
     # --- Data Integrity & Correlation Section ---
     ss = st.session_state
@@ -1213,6 +1297,20 @@ def step5_test():
         st.info('No trained model available.')
         return
     model = ss['trained_model']
+    # --- Download button temporarily disabled for regression evaluation ---
+    # download_cols = st.columns([2,1])
+    # with download_cols[1]:
+    #     import pickle
+    #     scaler = ss['settings'].get('_scaler')
+    #     bundle = {"model": model, "scaler": scaler}
+    #     bundle_bytes = pickle.dumps(bundle)
+    #     st.download_button(
+    #         label="Download the Model",
+    #         data=bundle_bytes,
+    #         file_name="LinearRegressionModel.pkl",
+    #         mime="application/octet-stream",
+    #         help="Download the trained model and scaler as a .pkl file."
+    #     )
     st.subheader('Single prediction')
     features = ss['features']
     if not features:
