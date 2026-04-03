@@ -201,7 +201,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder
  
 from sklearn.linear_model import LinearRegression, LogisticRegression
 import numpy as np
@@ -455,30 +454,22 @@ def step1_model_and_data():
                 prev_features = []
             safe_defaults = [f for f in prev_features if f in cols]
 
-            select_all_label = 'Select All'
-
             if 'feature_select_ui' not in st.session_state:
                 st.session_state['feature_select_ui'] = safe_defaults
             else:
                 current_feature_selection = st.session_state.get('feature_select_ui', [])
                 st.session_state['feature_select_ui'] = [
                     f for f in current_feature_selection
-                    if f == select_all_label or f in cols
+                    if f in cols
                 ]
                 if not st.session_state['feature_select_ui'] and safe_defaults:
                     st.session_state['feature_select_ui'] = safe_defaults
 
-            if st.session_state.pop('select_all_features_pending', False):
-                st.session_state['feature_select_ui'] = cols.copy()
-
-            feature_options = [select_all_label] + cols
+            feature_options = cols
 
             if ss['model_type'] == 'Clustering':
                 selected_features = st.multiselect('Select feature columns', options=feature_options, key='feature_select_ui')
-                if select_all_label in selected_features:
-                    st.session_state['select_all_features_pending'] = True
-                    st.rerun()
-                features = [f for f in st.session_state.get('feature_select_ui', []) if f in cols]
+                features = [f for f in selected_features if f in cols]
                 ss['features'] = features
                 ss['target'] = None
                 if features:
@@ -517,10 +508,7 @@ def step1_model_and_data():
                 target_cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_target_select(c)]
                 target = st.selectbox('Select target column', options=["Select a target..."] + target_cols, index=0, key='target_select')
                 selected_features = st.multiselect('Select feature columns', options=feature_options, key='feature_select_ui')
-                if select_all_label in selected_features:
-                    st.session_state['select_all_features_pending'] = True
-                    st.rerun()
-                features = [f for f in st.session_state.get('feature_select_ui', []) if f in cols]
+                features = [f for f in selected_features if f in cols]
                 selected_target = st.session_state.get('target_select')
                 if selected_target is not None and selected_target != "Select a target..." and str(selected_target).strip() != '':
                     ss['target'] = selected_target
@@ -559,22 +547,7 @@ def step1_model_and_data():
                 preview_df = ss.get('uploaded_df')
 
             if preview_df is not None and not preview_df.empty:
-                try:
-                    gb = GridOptionsBuilder.from_dataframe(preview_df)
-                    gb.configure_default_column(enablePivot=True, enableValue=True, enableRowGroup=True)
-                    gb.configure_side_bar()
-                    gb.configure_grid_options(domLayout='normal')
-                    grid_options = gb.build()
-                    AgGrid(
-                        preview_df,
-                        gridOptions=grid_options,
-                        height=600,
-                        enable_enterprise_modules=False,
-                        fit_columns_on_grid_load=True,
-                    )
-                except Exception:
-                    st.caption('Interactive grid unavailable in this environment. Showing standard preview instead.')
-                    st.dataframe(preview_df, use_container_width=True, height=600)
+                st.dataframe(preview_df, use_container_width=True, height=600)
             else:
                 st.info('No data to preview.')
             st.markdown('---')
