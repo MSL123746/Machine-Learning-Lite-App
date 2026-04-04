@@ -98,7 +98,7 @@ def init_state():
     if 'step' not in ss:
         ss['step'] = 1
     defaults = {
-        'algorithm': 'Linear Regression',
+        'algorithm': 'Random Forest Regression',
         'model_type': 'Regression',
         'uploaded_df': None,
         'df_sample': None,
@@ -203,6 +203,7 @@ import pandas as pd
 import streamlit as st
  
 from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.ensemble import RandomForestRegressor
 import numpy as np
 from sklearn.metrics import (
     accuracy_score,
@@ -569,6 +570,20 @@ def step2_settings():
         ss['settings']['train_frac'] = split / 100.0
         scale = st.checkbox('Standardize numeric features', value=True)
         ss['settings']['scale'] = bool(scale)
+        if ss.get('model_type') == 'Regression':
+            reg_options = ['Random Forest Regression', 'Linear Regression']
+            current_alg = ss['settings'].get('algorithm', ss.get('algorithm', reg_options[0]))
+            if current_alg not in reg_options:
+                current_alg = reg_options[0]
+            selected_alg = st.selectbox('Regression algorithm', reg_options, index=reg_options.index(current_alg))
+            ss['settings']['algorithm'] = selected_alg
+            ss['algorithm'] = selected_alg
+        elif ss.get('model_type') == 'Binary classification':
+            ss['settings']['algorithm'] = 'Logistic Regression (Binary)'
+            ss['algorithm'] = 'Logistic Regression (Binary)'
+        elif ss.get('model_type') == 'Multi-class classification':
+            ss['settings']['algorithm'] = 'Logistic Regression (Multi-class)'
+            ss['algorithm'] = 'Logistic Regression (Multi-class)'
         # Show number of training and testing rows
         if ss['uploaded_df'] is not None and ss['features'] is not None:
             df = ss['uploaded_df']
@@ -721,20 +736,26 @@ def step3_training():
             log(f'Stored {len(ss["training_columns"])} training feature columns for later alignment.')
             p.progress(60)
             # choose model
-            alg = ss['settings'].get('algorithm')
+            alg = ss['settings'].get('algorithm', ss.get('algorithm'))
             model = None
             if ss['model_type'] == 'Regression':
-                if alg == 'Linear Regression' or alg is None:
+                if alg == 'Linear Regression':
                     model = LinearRegression()
                     log('Fitting Linear Regression...')
+                else:
+                    model = RandomForestRegressor(
+                        n_estimators=250,
+                        max_depth=8,
+                        min_samples_leaf=3,
+                        random_state=42,
+                    )
+                    log('Fitting Random Forest Regression...')
             elif ss['model_type'] == 'Binary classification':
-                if alg == 'Logistic Regression (Binary)' or alg is None:
-                    model = LogisticRegression(C=ss['settings'].get('C', 1.0), max_iter=500, solver='lbfgs')
-                    log('Fitting Logistic Regression (Binary)...')
+                model = LogisticRegression(C=ss['settings'].get('C', 1.0), max_iter=500, solver='lbfgs')
+                log('Fitting Logistic Regression (Binary)...')
             else:  # Multi-class classification
-                if alg == 'Logistic Regression (Multi-class)' or alg is None:
-                    model = LogisticRegression(C=ss['settings'].get('C', 1.0), max_iter=500, solver='lbfgs')
-                    log('Fitting Logistic Regression (Multi-class)...')
+                model = LogisticRegression(C=ss['settings'].get('C', 1.0), max_iter=500, solver='lbfgs')
+                log('Fitting Logistic Regression (Multi-class)...')
             if model is None:
                 log('No valid algorithm selected. Defaulting to Linear Regression.')
                 model = LinearRegression()
@@ -1199,25 +1220,26 @@ def step4_results():
                 st.image(buf)
 
     elif ss['model_type'] == 'Clustering':
-        # --- Download button for clustering models ---
-        download_cols = st.columns([2,1])
-        with download_cols[1]:
-            import pickle
-            model = ss.get('trained_model')
-            scaler = ss['settings'].get('_scaler')
-            bundle = {"model": model, "scaler": scaler}
-            bundle_bytes = pickle.dumps(bundle)
-            alg = ss.get('algorithm', '')
-            if not alg:
-                alg = type(model).__name__
-            file_alg = alg.replace(' ', '').replace('(', '').replace(')', '')
-            st.download_button(
-                label="Download the Model",
-                data=bundle_bytes,
-                file_name=f"{file_alg}Model.pkl",
-                mime="application/octet-stream",
-                help="Download the trained model and scaler as a .pkl file."
-            )
+        # --- Download button for clustering models temporarily disabled ---
+        # download_cols = st.columns([2,1])
+        # with download_cols[1]:
+        #     import pickle
+        #     model = ss.get('trained_model')
+        #     scaler = ss['settings'].get('_scaler')
+        #     bundle = {"model": model, "scaler": scaler}
+        #     bundle_bytes = pickle.dumps(bundle)
+        #     alg = ss.get('algorithm', '')
+        #     if not alg:
+        #         alg = type(model).__name__
+        #     file_alg = alg.replace(' ', '').replace('(', '').replace(')', '')
+        #     st.download_button(
+        #         label="Download the Model",
+        #         data=bundle_bytes,
+        #         file_name=f"{file_alg}Model.pkl",
+        #         mime="application/octet-stream",
+        #         help="Download the trained model and scaler as a .pkl file."
+        #     )
+        pass
 
     # --- Data Integrity & Correlation Section ---
     ss = st.session_state
@@ -1270,6 +1292,33 @@ def step5_test():
         st.info('No trained model available.')
         return
     model = ss['trained_model']
+
+    def build_prediction_summary(input_values, prediction_value):
+        lines = [f"Prediction: {prediction_value:,.2f}" if isinstance(prediction_value, (int, float, np.integer, np.floating)) else f"Prediction: {prediction_value}", "", "Selected Values:"]
+        for field, value in input_values.items():
+            label = str(field).replace('_', ' ').strip()
+            if isinstance(value, str):
+                if value.strip():
+                    lines.append(f"- {label}: {value}")
+                continue
+            try:
+                numeric_value = float(value)
+            except Exception:
+                if value not in (None, ''):
+                    lines.append(f"- {label}: {value}")
+                continue
+
+            if numeric_value in (0.0, 1.0):
+                if numeric_value == 1.0:
+                    parts = str(field).split('_')
+                    if len(parts) >= 2:
+                        lines.append(f"- {' '.join(parts[:-1])}: {parts[-1]}")
+                continue
+
+            display_value = int(numeric_value) if numeric_value.is_integer() else round(numeric_value, 2)
+            lines.append(f"- {label}: {display_value}")
+
+        return '\n'.join(lines)
     # --- Download button temporarily disabled for regression evaluation ---
     # download_cols = st.columns([2,1])
     # with download_cols[1]:
@@ -1320,12 +1369,30 @@ def step5_test():
                 proba = model.predict_proba(X)
             else:
                 proba = None
-            st.success(f'Prediction: {pred[0]}')
-            if proba is not None:
-                st.write('Confidence / probabilities:')
-                st.write(proba[0].tolist())
+            ss['last_prediction_value'] = pred[0]
+            ss['last_prediction_inputs'] = dict(input_vals)
+            ss['last_prediction_summary'] = build_prediction_summary(input_vals, pred[0])
+            ss['last_prediction_proba'] = proba[0].tolist() if proba is not None else None
+            ss['last_prediction_refresh_id'] = ss.get('last_prediction_refresh_id', 0) + 1
+            st.rerun()
         except Exception as e:
             st.error(readable_exception(e))
+
+    if 'last_prediction_value' in ss:
+        st.success(f"Prediction: {ss['last_prediction_value']}")
+        if ss.get('last_prediction_proba') is not None:
+            st.write('Confidence / probabilities:')
+            st.write(ss['last_prediction_proba'])
+
+        action_cols = st.columns([5, 1])
+        with action_cols[1]:
+            with st.popover('Copy Summary'):
+                st.text_area(
+                    'Copy this text',
+                    value=ss.get('last_prediction_summary', ''),
+                    height=220,
+                    key=f"prediction_summary_text_area_{ss.get('last_prediction_refresh_id', 0)}"
+                )
     # Batch predictions feature removed
 
 
