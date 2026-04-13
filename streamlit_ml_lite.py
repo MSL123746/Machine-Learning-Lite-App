@@ -1111,28 +1111,6 @@ def step4_results():
             st.markdown(f'<div class="metric-square"><div class="label">RECALL (MACRO)</div><div class="value">{safe_metric(metrics.get("recall"))}</div></div>', unsafe_allow_html=True)
         with cols[6]:
             st.markdown(f'<div class="metric-square"><div class="label">F1 (MACRO)</div><div class="value">{safe_metric(metrics.get("f1"))}</div></div>', unsafe_allow_html=True)
-
-        # --- Download button for classification models ---
-        download_cols = st.columns([2,1])
-        with download_cols[1]:
-            import pickle
-            model = ss.get('trained_model')
-            scaler = ss['settings'].get('_scaler')
-            bundle = {"model": model, "scaler": scaler}
-            bundle_bytes = pickle.dumps(bundle)
-            # Determine algorithm name for file
-            alg = ss.get('algorithm', '')
-            if not alg:
-                alg = type(model).__name__
-            # Clean up name for file
-            file_alg = alg.replace(' ', '').replace('(', '').replace(')', '')
-            st.download_button(
-                label="Download the Model",
-                data=bundle_bytes,
-                file_name=f"{file_alg}Model.pkl",
-                mime="application/octet-stream",
-                help="Download the trained model and scaler as a .pkl file."
-            )
         # Show confusion matrix and ROC curve for binary, confusion matrix for multi-class
         if ss.get('_y_val') is not None:
             y_val = ss['_y_val']
@@ -1220,25 +1198,6 @@ def step4_results():
                 st.image(buf)
 
     elif ss['model_type'] == 'Clustering':
-        # --- Download button for clustering models temporarily disabled ---
-        # download_cols = st.columns([2,1])
-        # with download_cols[1]:
-        #     import pickle
-        #     model = ss.get('trained_model')
-        #     scaler = ss['settings'].get('_scaler')
-        #     bundle = {"model": model, "scaler": scaler}
-        #     bundle_bytes = pickle.dumps(bundle)
-        #     alg = ss.get('algorithm', '')
-        #     if not alg:
-        #         alg = type(model).__name__
-        #     file_alg = alg.replace(' ', '').replace('(', '').replace(')', '')
-        #     st.download_button(
-        #         label="Download the Model",
-        #         data=bundle_bytes,
-        #         file_name=f"{file_alg}Model.pkl",
-        #         mime="application/octet-stream",
-        #         help="Download the trained model and scaler as a .pkl file."
-        #     )
         pass
 
     # --- Data Integrity & Correlation Section ---
@@ -1319,20 +1278,6 @@ def step5_test():
             lines.append(f"- {label}: {display_value}")
 
         return '\n'.join(lines)
-    # --- Download button temporarily disabled for regression evaluation ---
-    # download_cols = st.columns([2,1])
-    # with download_cols[1]:
-    #     import pickle
-    #     scaler = ss['settings'].get('_scaler')
-    #     bundle = {"model": model, "scaler": scaler}
-    #     bundle_bytes = pickle.dumps(bundle)
-    #     st.download_button(
-    #         label="Download the Model",
-    #         data=bundle_bytes,
-    #         file_name="LinearRegressionModel.pkl",
-    #         mime="application/octet-stream",
-    #         help="Download the trained model and scaler as a .pkl file."
-    #     )
     st.subheader('Single prediction')
     features = ss['features']
     if not features:
