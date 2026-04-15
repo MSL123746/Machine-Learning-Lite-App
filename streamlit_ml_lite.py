@@ -201,6 +201,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
+from st_aggrid import AgGrid, GridOptionsBuilder
  
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.ensemble import RandomForestRegressor
@@ -337,6 +338,13 @@ def readable_exception(e: Exception):
     return f"Error: {str(e)}"
 
 
+def build_prediction_summary(input_vals, prediction):
+    lines = [f"Prediction: {prediction}", "", "Inputs:"]
+    for key, value in input_vals.items():
+        lines.append(f"- {key}: {value}")
+    return "\n".join(lines)
+
+
 
 
 
@@ -390,7 +398,7 @@ def sidebar_steps():
     # All computer vision, DummyClassifier, and test_gray code removed2
 
 def step1_model_and_data():
-    st.header('Welcome to the Machine Learning Training Simulator (2026 Edition)')
+    st.header('Welcome to the Machine Learning Training Simulator (2026 Ed.)')
     ss = st.session_state
     # ...existing code...
     col1, col2 = st.columns([2, 5])
@@ -454,23 +462,8 @@ def step1_model_and_data():
             if prev_features is None:
                 prev_features = []
             safe_defaults = [f for f in prev_features if f in cols]
-
-            if 'feature_select_ui' not in st.session_state:
-                st.session_state['feature_select_ui'] = safe_defaults
-            else:
-                current_feature_selection = st.session_state.get('feature_select_ui', [])
-                st.session_state['feature_select_ui'] = [
-                    f for f in current_feature_selection
-                    if f in cols
-                ]
-                if not st.session_state['feature_select_ui'] and safe_defaults:
-                    st.session_state['feature_select_ui'] = safe_defaults
-
-            feature_options = cols
-
             if ss['model_type'] == 'Clustering':
-                selected_features = st.multiselect('Select feature columns', options=feature_options, key='feature_select_ui')
-                features = [f for f in selected_features if f in cols]
+                features = st.multiselect('Select feature columns', options=cols, default=safe_defaults, key='feature_select')
                 ss['features'] = features
                 ss['target'] = None
                 if features:
@@ -508,8 +501,7 @@ def step1_model_and_data():
                     )
                 target_cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_target_select(c)]
                 target = st.selectbox('Select target column', options=["Select a target..."] + target_cols, index=0, key='target_select')
-                selected_features = st.multiselect('Select feature columns', options=feature_options, key='feature_select_ui')
-                features = [f for f in selected_features if f in cols]
+                features = st.multiselect('Select feature columns', options=cols, default=safe_defaults, key='feature_select')
                 selected_target = st.session_state.get('target_select')
                 if selected_target is not None and selected_target != "Select a target..." and str(selected_target).strip() != '':
                     ss['target'] = selected_target
@@ -548,7 +540,12 @@ def step1_model_and_data():
                 preview_df = ss.get('uploaded_df')
 
             if preview_df is not None and not preview_df.empty:
-                st.dataframe(preview_df, use_container_width=True, height=600)
+                gb = GridOptionsBuilder.from_dataframe(preview_df)
+                gb.configure_default_column(enablePivot=True, enableValue=True, enableRowGroup=True)
+                gb.configure_side_bar()
+                gb.configure_grid_options(domLayout='normal')
+                grid_options = gb.build()
+                AgGrid(preview_df, gridOptions=grid_options, height=600, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
             else:
                 st.info('No data to preview.')
             st.markdown('---')
@@ -1111,6 +1108,7 @@ def step4_results():
             st.markdown(f'<div class="metric-square"><div class="label">RECALL (MACRO)</div><div class="value">{safe_metric(metrics.get("recall"))}</div></div>', unsafe_allow_html=True)
         with cols[6]:
             st.markdown(f'<div class="metric-square"><div class="label">F1 (MACRO)</div><div class="value">{safe_metric(metrics.get("f1"))}</div></div>', unsafe_allow_html=True)
+
         # Show confusion matrix and ROC curve for binary, confusion matrix for multi-class
         if ss.get('_y_val') is not None:
             y_val = ss['_y_val']
@@ -1168,26 +1166,42 @@ def step4_results():
                 if hasattr(ss['trained_model'], 'classes_'):
                     class_labels = ss['trained_model'].classes_
                 import io
-                fig, ax = plt.subplots(figsize=(3, 2.5), dpi=150)
-                disp = ConfusionMatrixDisplay.from_predictions(
-                    y_val, y_pred,
-                    display_labels=class_labels,
+                is_multiclass = ss['model_type'] == 'Multi-class classification'
+                observed_labels = list(np.unique(np.concatenate([np.asarray(y_val), np.asarray(y_pred)])))
+                if class_labels is None:
+                    plot_labels = observed_labels
+                else:
+                    overlapping_labels = [label for label in class_labels if label in observed_labels]
+                    plot_labels = overlapping_labels if overlapping_labels else observed_labels
+                display_labels = plot_labels
+                if is_multiclass:
+                    display_labels = list(range(len(plot_labels)))
+                fig, ax = plt.subplots(figsize=(4.6, 3.8) if is_multiclass else (3, 2.5), dpi=150)
+                cm = confusion_matrix(y_val, y_pred, labels=plot_labels)
+                disp = ConfusionMatrixDisplay(
+                    confusion_matrix=cm,
+                    display_labels=display_labels,
+                )
+                disp.plot(
                     cmap=plt.cm.Blues,
                     ax=ax,
                     colorbar=True,
-                    values_format='.2g' if ss['model_type'] == 'Multi-class classification' else None
+                    values_format='.2g' if is_multiclass else None,
                 )
-                # Fix tick mismatch error
-                n_labels = len(class_labels) if class_labels is not None else 0
-                ax.set_xticks(range(n_labels))
-                ax.set_yticks(range(n_labels))
-                ax.set_title('Confusion Matrix', fontsize=9 if ss['model_type'] == 'Multi-class classification' else 12, pad=5)
-                ax.set_xlabel('Predicted label', fontsize=8 if ss['model_type'] == 'Multi-class classification' else 10, labelpad=4)
-                ax.set_ylabel('True label', fontsize=8 if ss['model_type'] == 'Multi-class classification' else 10, labelpad=4)
-                ax.tick_params(axis='both', labelsize=7 if ss['model_type'] == 'Multi-class classification' else 9, length=2)
-                if ss['model_type'] == 'Multi-class classification':
+                ax.set_title('Confusion' \
+                ' Matrix', fontsize=10 if is_multiclass else 12, pad=6)
+                ax.set_xlabel('Predicted label', fontsize=8 if is_multiclass else 10, labelpad=4)
+                ax.set_ylabel('True label', fontsize=8 if is_multiclass else 10, labelpad=4)
+                ax.tick_params(axis='both', labelsize=8 if is_multiclass else 9, length=2)
+                if is_multiclass:
+                    plt.setp(ax.get_xticklabels(), rotation=0, ha='center')
+                    plt.setp(ax.get_yticklabels(), rotation=0)
+                    if getattr(disp, 'text_', None) is not None:
+                        for text in disp.text_.ravel():
+                            if text is not None:
+                                text.set_fontsize(7)
                     cb = ax.figure.axes[-1]
-                    cb.tick_params(labelsize=7, length=2)
+                    cb.tick_params(labelsize=6, length=2)
                     fig.tight_layout(pad=0.5)
                 else:
                     fig.tight_layout()
@@ -1195,14 +1209,35 @@ def step4_results():
                 fig.savefig(buf, format='png', bbox_inches='tight')
                 plt.close(fig)
                 buf.seek(0)
-                st.image(buf)
-
-    elif ss['model_type'] == 'Clustering':
-        pass
+                if is_multiclass:
+                    chart_col, legend_col, spacer_col = st.columns([3.6, 1.7, 1.2], gap="small")
+                    with chart_col:
+                        st.image(buf)
+                    with legend_col:
+                        legend_lines = [f"{index}: {label}" for index, label in enumerate(plot_labels)]
+                        st.markdown(
+                            "<div style='margin-top: 0.6rem; margin-left: -18px;'></div>",
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown(
+                            "<div style='font-size: 1.6rem; color: #6b7280; margin-bottom: 0.35rem; margin-left: -18px; font-weight: 600;'>Class Legend</div>",
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown(
+                            "<div style='white-space: pre-line; font-family: monospace; font-size: 1.7rem; line-height: 1.5; margin-left: -18px;'>"
+                            + "<br>".join(legend_lines)
+                            + "</div>",
+                            unsafe_allow_html=True,
+                        )
+                    with spacer_col:
+                        st.empty()
+                else:
+                    st.image(buf)
+    # Removed Model artifacts and download buttons as requested
 
     # --- Data Integrity & Correlation Section ---
     ss = st.session_state
-    if ss.get('model_type') in ['Regression', 'Binary classification', 'Multi-class classification'] and ss.get('uploaded_df') is not None:
+    if ss.get('model_type') in ['Regression', 'Binary classification'] and ss.get('uploaded_df') is not None:
         st.markdown('---')
         st.markdown('## Data Integrity & Correlation')
         import pandas as pd
@@ -1251,33 +1286,6 @@ def step5_test():
         st.info('No trained model available.')
         return
     model = ss['trained_model']
-
-    def build_prediction_summary(input_values, prediction_value):
-        lines = [f"Prediction: {prediction_value:,.2f}" if isinstance(prediction_value, (int, float, np.integer, np.floating)) else f"Prediction: {prediction_value}", "", "Selected Values:"]
-        for field, value in input_values.items():
-            label = str(field).replace('_', ' ').strip()
-            if isinstance(value, str):
-                if value.strip():
-                    lines.append(f"- {label}: {value}")
-                continue
-            try:
-                numeric_value = float(value)
-            except Exception:
-                if value not in (None, ''):
-                    lines.append(f"- {label}: {value}")
-                continue
-
-            if numeric_value in (0.0, 1.0):
-                if numeric_value == 1.0:
-                    parts = str(field).split('_')
-                    if len(parts) >= 2:
-                        lines.append(f"- {' '.join(parts[:-1])}: {parts[-1]}")
-                continue
-
-            display_value = int(numeric_value) if numeric_value.is_integer() else round(numeric_value, 2)
-            lines.append(f"- {label}: {display_value}")
-
-        return '\n'.join(lines)
     st.subheader('Single prediction')
     features = ss['features']
     if not features:
