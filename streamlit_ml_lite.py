@@ -1345,37 +1345,40 @@ def step5_test():
         point_y = sigmoid(point_x)
         point_colors = np.where(flagged_mask, '#dc2626', '#16a34a')
 
-        fig, ax = plt.subplots(figsize=(3.6, 2.3), dpi=180)
+        fig, ax = plt.subplots(figsize=(8.4, 5.6), dpi=180)
         ax.plot(sigmoid_x, sigmoid_y, color='#2563eb', linewidth=2.5, label='Sigmoid curve')
         ax.scatter(
             point_x,
             point_y,
             c=point_colors,
-            s=34,
+            s=58,
             alpha=0.85,
             edgecolors='white',
             linewidths=0.5,
             zorder=3,
         )
         ax.axhline(risk_threshold, color='#0f172a', linestyle='--', linewidth=1.8, label='Risk boundary')
-        ax.set_title('Binary Risk Threshold Analysis', fontsize=13, pad=8)
-        ax.set_xlabel('Log-Odds Position', fontsize=10)
-        ax.set_ylabel('Predicted Cancellation Probability', fontsize=10)
+        ax.set_title('Binary Risk Threshold Analysis', fontsize=13, pad=6)
+        ax.set_xlabel('Log-Odds Position', fontsize=11)
+        ax.set_ylabel('Predicted Cancellation Probability', fontsize=12)
         ax.set_xlim(-6, 6)
         ax.set_ylim(-0.02, 1.02)
         ax.grid(True, linestyle=':', alpha=0.35)
         ax.legend(loc='lower right', fontsize=9, frameon=True)
-        fig.tight_layout(pad=0.4)
-        chart_left, chart_center, chart_right = st.columns([1.0, 2.2, 1.2])
+        fig.subplots_adjust(left=0.16, right=0.98, top=0.90, bottom=0.18)
+        chart_left, chart_center, chart_right = st.columns([0.1, 3.9, 1.0])
         with chart_center:
-            st.pyplot(fig)
+            chart_buffer = io.BytesIO()
+            fig.savefig(chart_buffer, format='svg', bbox_inches='tight')
+            chart_svg = chart_buffer.getvalue().decode('utf-8')
+            st.markdown(f"<div style='text-align:center'>{chart_svg}</div>", unsafe_allow_html=True)
         with chart_right:
             st.download_button(
                 label='Download Probability CSV',
                 data=export_csv,
                 file_name='binary_risk_threshold_analysis.csv',
                 mime='text/csv',
-                use_container_width=True,
+                use_container_width=False,
             )
             st.markdown('**Legend**')
             st.markdown('Red: Flagged to cancel subscription')
