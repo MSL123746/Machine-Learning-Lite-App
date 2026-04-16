@@ -345,6 +345,10 @@ def build_prediction_summary(input_vals, prediction):
     return "\n".join(lines)
 
 
+def sigmoid(x):
+    return 1.0 / (1.0 + np.exp(-x))
+
+
 
 
 
@@ -398,7 +402,7 @@ def sidebar_steps():
     # All computer vision, DummyClassifier, and test_gray code removed2
 
 def step1_model_and_data():
-    st.header('Welcome to the Machine Learning Training Simulator (2026 Ed.)')
+    st.header('Welcome to the Machine Learning Training Simulator (2026 Edition)')
     ss = st.session_state
     # ...existing code...
     col1, col2 = st.columns([2, 5])
@@ -435,7 +439,7 @@ def step1_model_and_data():
             # Remove only relevant keys to avoid full Streamlit rerun issues
             for k in list(ss.keys()):
                 if k.startswith('uploaded_df') or k.startswith('df_sample') or k in [
-                    'features', 'target', 'step', 'model_type', 'settings', 'trained_model', 'metrics', '_X_val', '_y_val', '_y_proba', 'training_logs', 'training_status', 'training_columns', 'feature_importances', 'coefficients', 'clustering_X_scaled', 'optimal_n_clusters', 'cluster_labels']:
+                    'features', 'target', 'step', 'model_type', 'settings', 'trained_model', 'metrics', '_X_val', '_y_val', '_X_test', '_y_test', '_test_export_df', '_y_proba', 'training_logs', 'training_status', 'training_columns', 'feature_importances', 'coefficients', 'clustering_X_scaled', 'optimal_n_clusters', 'cluster_labels']:
                     del ss[k]
             ss['has_left_upload'] = False
             init_state()
@@ -719,6 +723,8 @@ def step3_training():
             # split
             train_frac = ss['settings'].get('train_frac', 0.8)
             X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=train_frac, random_state=42)
+            export_columns = features + ([target] if target not in features else [])
+            ss['_test_export_df'] = df.loc[X_val.index, export_columns].copy()
             log(f'Split data: {len(X_train)} train rows, {len(X_val)} validation rows.')
             if ss['model_type'] != 'Regression':
                 log(f'y_train value counts: {y_train.value_counts().to_dict()}')
@@ -728,6 +734,8 @@ def step3_training():
             # Store validation data for plotting
             ss['_X_val'] = X_val
             ss['_y_val'] = y_val
+            ss['_X_test'] = X_val
+            ss['_y_test'] = y_val
             # persist training feature columns so we can align one-off/batch predictions later
             ss['training_columns'] = X_train.columns.tolist()
             log(f'Stored {len(ss["training_columns"])} training feature columns for later alignment.')
@@ -1286,12 +1294,106 @@ def step5_test():
         st.info('No trained model available.')
         return
     model = ss['trained_model']
+
+    if ss.get('model_type') == 'Binary classification':
+        X_test = ss.get('_X_test', ss.get('_X_val'))
+        y_test = ss.get('_y_test', ss.get('_y_val'))
+        if X_test is None or y_test is None:
+            st.info('Test data is not available yet. Retrain the model first.')
+            return
+        if not hasattr(model, 'predict_proba'):
+            st.info('This model does not expose probability scores for threshold analysis.')
+            return
+
+        probability_scores = model.predict_proba(X_test)[:, 1]
+        risk_threshold = st.slider('Risk Tolerance', min_value=0.0, max_value=1.0, value=0.5, step=0.01)
+
+        flagged_mask = probability_scores >= risk_threshold
+        flagged_count = int(flagged_mask.sum())
+        safe_count = int((~flagged_mask).sum())
+        total_count = len(probability_scores)
+        export_df = ss.get('_test_export_df')
+        if export_df is None:
+            export_df = X_test.copy()
+            export_df[ss.get('target', 'Actual_Target')] = y_test.values
+        else:
+            export_df = export_df.copy()
+
+        export_df['Cancellation_Probability'] = np.round(probability_scores, 6)
+        export_df['Risk_Threshold'] = risk_threshold
+        export_df['Risk_Flag'] = np.where(flagged_mask, 'Flagged', 'Safe')
+        export_df['Customer_Status'] = np.where(flagged_mask, 'Flagged to cancel subscription', 'Happy subscriber')
+        export_csv = export_df.to_csv(index=False).encode('utf-8')
+
+        st.subheader('Risk Threshold Analysis')
+        metric_cols = st.columns(4)
+        with metric_cols[0]:
+            st.metric('Flagged Customers', flagged_count)
+        with metric_cols[1]:
+            st.metric('Safe Customers', safe_count)
+        with metric_cols[2]:
+            st.metric('Flagged Rate', f'{(flagged_count / total_count):.1%}')
+        with metric_cols[3]:
+            st.metric('Active Threshold', f'{risk_threshold:.2f}')
+
+        st.caption(f'Current default decision threshold baseline: {risk_threshold:.2f}')
+
+        sigmoid_x = np.linspace(-6, 6, 500)
+        sigmoid_y = sigmoid(sigmoid_x)
+        clipped_scores = np.clip(probability_scores, 1e-6, 1 - 1e-6)
+        point_x = np.log(clipped_scores / (1 - clipped_scores))
+        point_y = sigmoid(point_x)
+        point_colors = np.where(flagged_mask, '#dc2626', '#16a34a')
+
+        fig, ax = plt.subplots(figsize=(3.6, 2.3), dpi=180)
+        ax.plot(sigmoid_x, sigmoid_y, color='#2563eb', linewidth=2.5, label='Sigmoid curve')
+        ax.scatter(
+            point_x,
+            point_y,
+            c=point_colors,
+            s=34,
+            alpha=0.85,
+            edgecolors='white',
+            linewidths=0.5,
+            zorder=3,
+        )
+        ax.axhline(risk_threshold, color='#0f172a', linestyle='--', linewidth=1.8, label='Risk boundary')
+        ax.set_title('Binary Risk Threshold Analysis', fontsize=13, pad=8)
+        ax.set_xlabel('Log-Odds Position', fontsize=10)
+        ax.set_ylabel('Predicted Cancellation Probability', fontsize=10)
+        ax.set_xlim(-6, 6)
+        ax.set_ylim(-0.02, 1.02)
+        ax.grid(True, linestyle=':', alpha=0.35)
+        ax.legend(loc='lower right', fontsize=9, frameon=True)
+        fig.tight_layout(pad=0.4)
+        chart_left, chart_center, chart_right = st.columns([1.0, 2.2, 1.2])
+        with chart_center:
+            st.pyplot(fig)
+        with chart_right:
+            st.download_button(
+                label='Download Probability CSV',
+                data=export_csv,
+                file_name='binary_risk_threshold_analysis.csv',
+                mime='text/csv',
+                use_container_width=True,
+            )
+            st.markdown('**Legend**')
+            st.markdown('Red: Flagged to cancel subscription')
+            st.markdown('Green: Happy subscriber')
+        plt.close(fig)
+
+        st.caption('Red dots are flagged to cancel their subscription. Green dots are treated as happy subscribers.')
+        return
+
+    if ss.get('model_type') == 'Clustering':
+        st.info('Stage 5 evaluation is not used for clustering.')
+        return
+
     st.subheader('Single prediction')
     features = ss['features']
     if not features:
         st.info('No features selected.')
         return
-    # generate simple inputs
     input_vals = {}
     cols = st.columns(2)
     for i, f in enumerate(features):
@@ -1304,16 +1406,13 @@ def step5_test():
     if st.button('Predict'):
         try:
             X = pd.DataFrame([input_vals])
-            # apply scaling and dummies consistent with training
             if ss['settings'].get('scale', True):
                 scaler = ss['settings'].get('_scaler')
                 if scaler is not None:
                     num_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
                     if num_cols:
                         X[num_cols] = scaler.transform(X[num_cols])
-            # align dummies with training
             X = pd.get_dummies(X, columns=[c for c in X.columns if not pd.api.types.is_numeric_dtype(X[c].dtype)], drop_first=True)
-            # Reindex to the training columns saved during training. Fill missing columns with 0.
             trained_cols = ss.get('training_columns')
             if trained_cols is not None:
                 X = X.reindex(columns=trained_cols, fill_value=0)
@@ -1346,7 +1445,6 @@ def step5_test():
                     height=220,
                     key=f"prediction_summary_text_area_{ss.get('last_prediction_refresh_id', 0)}"
                 )
-    # Batch predictions feature removed
 
 
 
