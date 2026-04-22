@@ -1,6 +1,37 @@
+import io
+import html
+import json
+import pickle
+import sys
+import tempfile
+import time
+from typing import Optional
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import streamlit as st
-# New Repo Jan 8, 2026 - First Commit
-st.markdown("""
+from st_aggrid import AgGrid, GridOptionsBuilder
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.metrics import (
+    accuracy_score,
+    auc,
+    confusion_matrix,
+    f1_score,
+    mean_absolute_error,
+    mean_squared_error,
+    precision_score,
+    r2_score,
+    recall_score,
+    roc_curve,
+)
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+
+st.set_page_config(page_title='Machine Learning Sandbox', layout='wide')
+
+GLOBAL_STYLES = """
     <style>
     /* Hide uploaded file list in file_uploader for all Streamlit versions */
     div[data-testid="stFileUploader"] ul,
@@ -47,6 +78,10 @@ st.markdown("""
         border: 1.5px solid #e5e7eb !important;
         box-shadow: 0 1px 6px rgba(37,99,235,0.07) !important;
     }
+    /* Hide Streamlit's default size/type hint (e.g. "200MB per file • CSV") */
+    div[data-testid="stFileUploaderDropzoneInstructions"] {
+        display: none !important;
+    }
     /* Buttons */
     button, div.stButton > button {
         border-radius: 10px !important;
@@ -87,9 +122,13 @@ st.markdown("""
         box-shadow: 0 4px 16px rgba(37,99,235,0.18) !important;
     }
     </style>
-""", unsafe_allow_html=True)
+"""
 
-import sys
+
+def inject_global_styles():
+    st.markdown(GLOBAL_STYLES, unsafe_allow_html=True)
+
+
 print(f"Python executable: {sys.executable}")
 print(f"Python version: {sys.version}")
 
@@ -115,6 +154,83 @@ def init_state():
     for k, v in defaults.items():
         if k not in ss:
             ss[k] = v
+
+
+def _normalized_col_name(col):
+    return ''.join(ch for ch in str(col).lower() if ch.isalnum())
+
+
+def is_valid_target_select(col):
+    return True
+
+
+def is_identifier_like_column(col):
+    normalized = _normalized_col_name(col)
+    if normalized == 'customerid':
+        return False
+    return normalized in {
+        'id',
+        'custid',
+        'userid',
+        'useridnumber',
+        'recordid',
+        'rowid',
+    } or normalized.endswith('identifier') or normalized.endswith('uniqueid')
+
+
+def is_target_reference_like_column(col):
+    normalized = _normalized_col_name(col)
+    return normalized in {
+        'targetref',
+        'targetreference',
+        'targetlabel',
+        'targetname',
+        'targettext',
+        'targetdescription',
+        'classlabel',
+        'classname',
+        'labelname',
+    }
+
+
+def is_valid_feature_select(col, selected_target=None):
+    if selected_target is not None and str(col) == str(selected_target):
+        return False
+    return True
+
+
+def sanitize_feature_selection(df, selected_features, selected_target=None):
+    available_features = [
+        col for col in list(df.columns)
+        if is_valid_feature_select(col, selected_target=selected_target)
+    ]
+    if not selected_features:
+        return [], available_features
+    sanitized = [col for col in selected_features if col in available_features]
+    return sanitized, available_features
+
+def get_effective_training_features(df, selected_features, selected_target=None):
+    sanitized, available_features = sanitize_feature_selection(
+        df,
+        selected_features,
+        selected_target=selected_target,
+    )
+    if not selected_target:
+        return sanitized, available_features, []
+
+    normalized_target = _normalized_col_name(selected_target)
+    excluded_features = []
+    effective_features = []
+    for col in sanitized:
+        normalized_col = _normalized_col_name(col)
+        is_target_pair = (
+            {normalized_target, normalized_col} == {'targetvalue', 'targetref'}
+        )
+        if is_target_pair:
+            excluded_features.append(col)
+        else:
+            effective_features.append(col)
+    return effective_features, available_features, excluded_features
 
 
 # Ensure this function is defined before main block
@@ -153,98 +269,6 @@ def _run_with_streamlit_if_needed():
         os.environ['STREAMLIT_RELAUNCHED'] = '1'
         python = sys.executable or 'python'
         os.execv(python, [python, '-m', 'streamlit', 'run', __file__])
-
-    def _run_with_streamlit_if_needed():
-        """When the file is executed directly (e.g. via VS Code "Run Python File"),
-        re-launch it under the Streamlit runner so the developer experience works
-        without typing the long command.
-
-        If the script is already running under Streamlit's script runner, just
-        call main() normally.
-        """
-        import os
-        import sys
-        try:
-            # If we're running under streamlit's runtime, get_script_run_ctx() will
-            # return a context object. In that case, just execute main().
-            from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
-            ctx = get_script_run_ctx()
-        except Exception:
-            ctx = None
-
-        # Prevent accidental relaunch loops: if we already relaunched this process
-        # into Streamlit once, don't try to exec again — just run main(). This can
-        # happen if an external launcher triggers the script multiple times.
-        if os.environ.get('STREAMLIT_RELAUNCHED') == '1':
-            main()
-            return
-
-        if ctx is not None:
-            # Running under streamlit already (e.g. `streamlit run ...`) — start app normally
-            main()
-        else:
-            # Not running under streamlit: set a marker in the environment and
-            # replace the current process with `python -m streamlit run <this file>`
-            # so logs appear in the same terminal.
-            os.environ['STREAMLIT_RELAUNCHED'] = '1'
-            python = sys.executable or 'python'
-            os.execv(python, [python, '-m', 'streamlit', 'run', __file__])
-
-import io
-import json
-import pickle
-import tempfile
-import time
-from typing import Optional
-
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder
- 
-from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.ensemble import RandomForestRegressor
-import numpy as np
-from sklearn.metrics import (
-    accuracy_score,
-    confusion_matrix,
-    f1_score,
-    mean_absolute_error,
-    mean_squared_error,
-    precision_score,
-    recall_score,
-    r2_score,
-    roc_curve,
-    auc,
-)
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-import matplotlib.pyplot as plt
-
-
-st.set_page_config(page_title='Machine Learning Sandbox', layout='wide')
-import sklearn
-
-def main():
-    from sklearn.linear_model import LogisticRegression
-    st.write('LogisticRegression class:', LogisticRegression)
-    init_state()
-    # Place the title at the top left with custom styling
-    st.markdown('<h1 style="text-align: left; margin-bottom: 0.5em;">Machine Learning Sandbox</h1>', unsafe_allow_html=True)
-    sidebar_steps()
-    ss = st.session_state
-    step = ss.get('step', 1)
-    if step == 1:
-        step1_model_and_data()
-    elif step == 2:
-        step2_settings()
-    elif step == 3:
-        start_training()
-        step3_training()
-    elif step == 4:
-        step4_results()
-    # Add more steps as needed
 
 def _inject_stepper_css():
     # CSS for sidebar and stepper
@@ -338,11 +362,29 @@ def readable_exception(e: Exception):
     return f"Error: {str(e)}"
 
 
+def _escape_html(value):
+    return html.escape(str(value), quote=True)
+
+
 def build_prediction_summary(input_vals, prediction):
     lines = [f"Prediction: {prediction}", "", "Inputs:"]
     for key, value in input_vals.items():
         lines.append(f"- {key}: {value}")
     return "\n".join(lines)
+
+
+def get_target_reference_lookup(ss):
+    uploaded_df = ss.get('uploaded_df')
+    selected_target = ss.get('target')
+    if (
+        uploaded_df is None
+        or selected_target != 'Target-Value'
+        or 'Target-Ref' not in uploaded_df.columns
+        or 'Target-Value' not in uploaded_df.columns
+    ):
+        return {}
+    target_ref_pairs = uploaded_df[['Target-Value', 'Target-Ref']].dropna().drop_duplicates()
+    return dict(zip(target_ref_pairs['Target-Value'], target_ref_pairs['Target-Ref']))
 
 
 def sigmoid(x):
@@ -410,16 +452,23 @@ def step1_model_and_data():
         model_types = ['Regression', 'Binary classification', 'Multi-class classification', 'Clustering']
         mt = st.selectbox('Model Type', model_types, index=model_types.index(ss.get('model_type', 'Regression')))
         ss['model_type'] = mt
-        st.markdown('Upload a CSV file (max 10 MB). The app will infer a simple schema.')
+        st.markdown('Upload a CSV file (max 10 MB and max 300 rows). The app will infer a simple schema.')
         csv_file = st.file_uploader('Upload CSV', type=['csv'])
-        st.caption(':information_source: **Note:** The maximum file size for upload is 10 MB. If you see a higher limit, it is a Streamlit default, but this app enforces a 10 MB limit.')
+        st.caption(':information_source: **Note:** This app enforces a hard upload limit of 10 MB and 300 rows.')
         if csv_file is not None:
             try:
                 data_bytes = csv_file.read()
                 if len(data_bytes) > 10 * 1024 * 1024:
+                    st.session_state['uploaded_df'] = None
+                    st.session_state['df_sample'] = None
                     st.error('File too large (limit 10 MB).')
                     return
                 df = pd.read_csv(io.BytesIO(data_bytes), na_values=['', ' '], keep_default_na=True)
+                if len(df) > 300:
+                    st.session_state['uploaded_df'] = None
+                    st.session_state['df_sample'] = None
+                    st.error(f'File has too many rows ({len(df)}). Limit is 300 rows.')
+                    return
                 auto_cols = [c for c in df.columns if 'auto' in str(c).lower() or 'unique_id' in str(c).lower() or '::auto_unique_id::' in str(c)]
                 if auto_cols:
                     df = df.drop(columns=auto_cols)
@@ -453,24 +502,14 @@ def step1_model_and_data():
                 ss['df_sample'] = df.copy()
 
             # --- Feature/target selection logic (restored) ---
-            def is_valid_feature_select(col):
-                return not (
-                    str(col).lower().startswith('auto_')
-                    or str(col).lower().endswith('unique-id')
-                    or str(col).lower().endswith('index')
-                    or str(col) == '::auto_unique_id::'
-                )
-            cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_feature_select(c)]
-            # Filter default features to only those in current options to avoid StreamlitAPIException
-            prev_features = ss.get('features')
-            if prev_features is None:
-                prev_features = []
-            safe_defaults = [f for f in prev_features if f in cols]
             if ss['model_type'] == 'Clustering':
+                cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_feature_select(c)]
+                prev_features = ss.get('features') or []
+                safe_defaults = [f for f in prev_features if f in cols]
                 features = st.multiselect('Select feature columns', options=cols, default=safe_defaults, key='feature_select')
-                ss['features'] = features
+                ss['features'], _ = sanitize_feature_selection(ss['uploaded_df'], features)
                 ss['target'] = None
-                if features:
+                if ss['features']:
                     next_btn_css = """
                     <style>
                     div.stButton > button {
@@ -496,23 +535,22 @@ def step1_model_and_data():
                         ss['step'] = 2
                         st.rerun()
             else:
-                def is_valid_target_select(col):
-                    return not (
-                        str(col).lower().startswith('auto_')
-                        or str(col).lower().endswith('unique-id')
-                        or str(col).lower().endswith('index')
-                        or str(col) == '::auto_unique_id::'
-                    )
                 target_cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_target_select(c)]
                 target = st.selectbox('Select target column', options=["Select a target..."] + target_cols, index=0, key='target_select')
-                features = st.multiselect('Select feature columns', options=cols, default=safe_defaults, key='feature_select')
                 selected_target = st.session_state.get('target_select')
                 if selected_target is not None and selected_target != "Select a target..." and str(selected_target).strip() != '':
                     ss['target'] = selected_target
                 else:
                     ss['target'] = None
-                ss['features'] = features
-                if features and ss['target'] is not None and ss['target'] != "Select a target..." and str(ss['target']).strip() != '':
+                cols = [
+                    c for c in list(ss['uploaded_df'].columns)
+                    if is_valid_feature_select(c, selected_target=ss['target'])
+                ]
+                prev_features = ss.get('features') or []
+                safe_defaults = [f for f in prev_features if f in cols]
+                features = st.multiselect('Select feature columns', options=cols, default=safe_defaults, key='feature_select')
+                ss['features'], _ = sanitize_feature_selection(ss['uploaded_df'], features, selected_target=ss['target'])
+                if ss['features'] and ss['target'] is not None and ss['target'] != "Select a target..." and str(ss['target']).strip() != '':
                     next_btn_css = """
                     <style>
                     div.stButton > button {
@@ -544,12 +582,9 @@ def step1_model_and_data():
                 preview_df = ss.get('uploaded_df')
 
             if preview_df is not None and not preview_df.empty:
-                gb = GridOptionsBuilder.from_dataframe(preview_df)
-                gb.configure_default_column(enablePivot=True, enableValue=True, enableRowGroup=True)
-                gb.configure_side_bar()
-                gb.configure_grid_options(domLayout='normal')
-                grid_options = gb.build()
-                AgGrid(preview_df, gridOptions=grid_options, height=600, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
+                # Always use Streamlit's native dataframe renderer for reliability.
+                # AgGrid can silently render a blank body in some environments/themes.
+                st.dataframe(preview_df, use_container_width=True, height=600)
             else:
                 st.info('No data to preview.')
             st.markdown('---')
@@ -588,7 +623,9 @@ def step2_settings():
         # Show number of training and testing rows
         if ss['uploaded_df'] is not None and ss['features'] is not None:
             df = ss['uploaded_df']
-            features = ss['features']
+            features, _, excluded_features = get_effective_training_features(df, ss['features'], selected_target=ss.get('target'))
+            ss['effective_features'] = features
+            ss['excluded_training_features'] = excluded_features
             X = df[features].copy()
             mask = X.notna().all(axis=1)
             X = X[mask]
@@ -616,7 +653,9 @@ def start_training():
     # Debug: print split sizes after splitting
     try:
         df = ss['uploaded_df']
-        features = ss['features']
+        features, _, excluded_features = get_effective_training_features(df, ss['features'], selected_target=ss.get('target'))
+        ss['effective_features'] = features
+        ss['excluded_training_features'] = excluded_features
         model_type = ss.get('model_type')
         if model_type == 'Clustering':
             from sklearn.cluster import KMeans
@@ -693,10 +732,14 @@ def step3_training():
             df = ss['uploaded_df'].copy()
             log('Preparing data...')
             p.progress(5)
-            features = ss['features']
+            features, _, excluded_features = get_effective_training_features(df, ss['features'], selected_target=ss.get('target'))
+            ss['effective_features'] = features
+            ss['excluded_training_features'] = excluded_features
             target = ss['target']
             X = df[features].copy()
             y = df[target].copy()
+            if excluded_features:
+                log(f'Excluded leakage-prone features from training: {excluded_features}')
             # Check for missing values and notify user
             missing_X = X.isna().sum().sum()
             missing_y = y.isna().sum()
@@ -826,8 +869,6 @@ def step3_training():
 
 
 def step4_results():
-    import matplotlib.pyplot as plt
-    import numpy as np
     st.header('4 • Training Results')
     ss = st.session_state
     if ss.get('trained_model') is None:
@@ -875,7 +916,6 @@ def step4_results():
         # Clustering results: show cluster scatter plot and centroid table
         from sklearn.cluster import KMeans
         import io
-        import pandas as pd
         model = ss.get('trained_model')
         X_scaled = ss.get('clustering_X_scaled')
         features = ss.get('features')
@@ -981,12 +1021,12 @@ def step4_results():
             ax.grid(True, linestyle=':', alpha=0.35)
             fig.tight_layout(pad=0.2)
             buf = io.BytesIO()
-            fig.savefig(buf, format="svg", bbox_inches="tight")
+            fig.savefig(buf, format="png", bbox_inches="tight")
             plt.close(fig)
-            svg = buf.getvalue().decode("utf-8")
+            buf.seek(0)
             if use_pca:
                 st.info('More than two features selected: PCA is used to project the data into 2D for visualization. Clustering is still performed in the full feature space.')
-            st.markdown(f"<div style='width:100%;text-align:center'>{svg}</div>", unsafe_allow_html=True)
+            st.image(buf)
             # Data table grouped by cluster with centroid numbers
             if df is not None and labels is not None:
                 df_table = df.copy()
@@ -1035,13 +1075,11 @@ def step4_results():
     # --- Keep the rest of the visuals and plots as before ---
     if ss['model_type'] == 'Regression':
         # Regression charts only
-        import matplotlib.pyplot as plt
         import io
         df = ss['uploaded_df']
-        features = ss['features']
+        features = ss.get('effective_features') or ss['features']
         target = ss['target']
         if df is not None and features is not None and target is not None:
-            import pandas as pd
             st.markdown('<div style="margin-top:1.2em;margin-bottom:0.3em;font-weight:600;font-size:1.08rem;">Regression Results</div>', unsafe_allow_html=True)
             # Encode features to match training columns
             X_encoded = pd.get_dummies(df[features], drop_first=True)
@@ -1067,10 +1105,10 @@ def step4_results():
                     ax_res.set_title('Residuals')
                     fig_res.tight_layout(pad=0.2)
                     buf_res = io.BytesIO()
-                    fig_res.savefig(buf_res, format="svg", bbox_inches="tight")
+                    fig_res.savefig(buf_res, format="png", bbox_inches="tight")
                     plt.close(fig_res)
-                    svg_res = buf_res.getvalue().decode("utf-8")
-                    st.markdown(f"<div style='width:100%;text-align:center'>{svg_res}</div>", unsafe_allow_html=True)
+                    buf_res.seek(0)
+                    st.image(buf_res)
                 # True vs Predicted plot: scatter + y=x red dashed line
                 with col2:
                     fig_tp, ax_tp = plt.subplots(figsize=(5, 4), dpi=180)
@@ -1086,10 +1124,10 @@ def step4_results():
                     ax_tp.set_title('True vs Predicted')
                     fig_tp.tight_layout(pad=0.2)
                     buf_tp = io.BytesIO()
-                    fig_tp.savefig(buf_tp, format="svg", bbox_inches="tight")
+                    fig_tp.savefig(buf_tp, format="png", bbox_inches="tight")
                     plt.close(fig_tp)
-                    svg_tp = buf_tp.getvalue().decode("utf-8")
-                    st.markdown(f"<div style='width:100%;text-align:center'>{svg_tp}</div>", unsafe_allow_html=True)
+                    buf_tp.seek(0)
+                    st.image(buf_tp)
             else:
                 st.warning('Validation data not available for plotting. Please retrain the model.')
     elif ss['model_type'] in ('Binary classification', 'Multi-class classification'):
@@ -1107,7 +1145,8 @@ def step4_results():
         with cols[1]:
             st.markdown(f'<div class="metric-square"><div class="label">TRAINING SAMPLES</div><div class="value">{len(ss["uploaded_df"])} </div></div>', unsafe_allow_html=True)
         with cols[2]:
-            st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(ss["features"])} </div></div>', unsafe_allow_html=True)
+            effective_features = ss.get('effective_features') or ss['features']
+            st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(effective_features)} </div></div>', unsafe_allow_html=True)
         with cols[3]:
             st.markdown(f'<div class="metric-square"><div class="label">ACCURACY</div><div class="value">{safe_metric(metrics.get("accuracy"))}</div></div>', unsafe_allow_html=True)
         with cols[4]:
@@ -1124,10 +1163,19 @@ def step4_results():
             if X_val is not None:
                 y_pred = ss['trained_model'].predict(X_val)
             else:
-                y_pred = ss['trained_model'].predict(pd.get_dummies(ss['uploaded_df'][ss['features']].dropna(), drop_first=True))[:len(y_val)]
+                effective_features = ss.get('effective_features') or ss['features']
+                y_pred = ss['trained_model'].predict(pd.get_dummies(ss['uploaded_df'][effective_features].dropna(), drop_first=True))[:len(y_val)]
+            if hasattr(ss['trained_model'], 'predict_proba'):
+                if ss.get('_y_proba') is not None and len(ss.get('_y_proba')) == len(y_val):
+                    y_proba = ss['_y_proba']
+                elif X_val is not None:
+                    y_proba = ss['trained_model'].predict_proba(X_val)
+                else:
+                    y_proba = None
+            else:
+                y_proba = None
             from sklearn.metrics import ConfusionMatrixDisplay
-            if ss['model_type'] == 'Binary classification' and hasattr(ss['trained_model'], 'predict_proba') and ss.get('_y_proba') is not None and len(set(y_val)) == 2:
-                y_proba = ss['_y_proba']
+            if ss['model_type'] == 'Binary classification' and y_proba is not None and len(set(y_val)) == 2:
                 fpr, tpr, _ = roc_curve(y_val, y_proba[:, 1])
                 roc_auc = auc(fpr, tpr)
                 plot_cols = st.columns(2)
@@ -1146,10 +1194,10 @@ def step4_results():
                     ax.tick_params(axis='both', labelsize=12)
                     fig.tight_layout(pad=0.2)
                     buf = io.BytesIO()
-                    fig.savefig(buf, format="svg", bbox_inches="tight")
+                    fig.savefig(buf, format="png", bbox_inches="tight")
                     plt.close(fig)
-                    svg = buf.getvalue().decode("utf-8")
-                    st.markdown(f"""<div style='width:100%;text-align:center'>{svg}</div>""", unsafe_allow_html=True)
+                    buf.seek(0)
+                    st.image(buf)
                 with plot_cols[1]:
                     import io
                     fig2, ax2 = plt.subplots(figsize=(4, 3), dpi=180)
@@ -1164,10 +1212,10 @@ def step4_results():
                     ax2.tick_params(axis='both', labelsize=12)
                     fig2.tight_layout(pad=0.2)
                     buf2 = io.BytesIO()
-                    fig2.savefig(buf2, format="svg", bbox_inches="tight")
+                    fig2.savefig(buf2, format="png", bbox_inches="tight")
                     plt.close(fig2)
-                    svg2 = buf2.getvalue().decode("utf-8")
-                    st.markdown(f"""<div style='width:100%;text-align:center'>{svg2}</div>""", unsafe_allow_html=True)
+                    buf2.seek(0)
+                    st.image(buf2)
             else:
                 # Multi-class or fallback confusion matrix
                 class_labels = None
@@ -1222,7 +1270,11 @@ def step4_results():
                     with chart_col:
                         st.image(buf)
                     with legend_col:
-                        legend_lines = [f"{index}: {label}" for index, label in enumerate(plot_labels)]
+                        legend_label_lookup = get_target_reference_lookup(ss)
+                        legend_lines = [
+                            f"{index}: {legend_label_lookup.get(label, label)}"
+                            for index, label in enumerate(plot_labels)
+                        ]
                         st.markdown(
                             "<div style='margin-top: 0.6rem; margin-left: -18px;'></div>",
                             unsafe_allow_html=True,
@@ -1233,7 +1285,7 @@ def step4_results():
                         )
                         st.markdown(
                             "<div style='white-space: pre-line; font-family: monospace; font-size: 1.7rem; line-height: 1.5; margin-left: -18px;'>"
-                            + "<br>".join(legend_lines)
+                            + "<br>".join(_escape_html(line) for line in legend_lines)
                             + "</div>",
                             unsafe_allow_html=True,
                         )
@@ -1241,6 +1293,37 @@ def step4_results():
                         st.empty()
                 else:
                     st.image(buf)
+
+            export_df = ss.get('_test_export_df')
+            if export_df is None:
+                export_df = pd.DataFrame(index=range(len(y_val)))
+            else:
+                export_df = export_df.copy().reset_index(drop=True)
+
+            actual_values = pd.Series(np.asarray(y_val)).reset_index(drop=True)
+            predicted_values = pd.Series(np.asarray(y_pred)).reset_index(drop=True)
+            legend_label_lookup = get_target_reference_lookup(ss)
+            export_df['Actual_Target'] = actual_values
+            export_df['Predicted_Target'] = predicted_values
+            if legend_label_lookup:
+                export_df['Actual_Label'] = actual_values.map(lambda value: legend_label_lookup.get(value, value))
+                export_df['Predicted_Label'] = predicted_values.map(lambda value: legend_label_lookup.get(value, value))
+
+            if y_proba is not None:
+                class_values = ss['trained_model'].classes_ if hasattr(ss['trained_model'], 'classes_') else list(range(y_proba.shape[1]))
+                for class_index, class_value in enumerate(class_values):
+                    class_label = legend_label_lookup.get(class_value, class_value)
+                    safe_label = str(class_label).replace(' ', '_').replace('-', '_')
+                    export_df[f'Probability_{safe_label}'] = y_proba[:, class_index]
+
+            export_csv = export_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label='Download Predictions CSV',
+                data=export_csv,
+                file_name='classification_predictions_with_probabilities.csv',
+                mime='text/csv',
+                use_container_width=False,
+            )
     # Removed Model artifacts and download buttons as requested
 
     # --- Data Integrity & Correlation Section ---
@@ -1248,8 +1331,6 @@ def step4_results():
     if ss.get('model_type') in ['Regression', 'Binary classification'] and ss.get('uploaded_df') is not None:
         st.markdown('---')
         st.markdown('## Data Integrity & Correlation')
-        import pandas as pd
-        import numpy as np
         df_corr = pd.get_dummies(ss['uploaded_df'], drop_first=False)
         selected_features = ss.get('features', [])
         target = ss.get('target')
@@ -1345,40 +1426,41 @@ def step5_test():
         point_y = sigmoid(point_x)
         point_colors = np.where(flagged_mask, '#dc2626', '#16a34a')
 
-        fig, ax = plt.subplots(figsize=(8.4, 5.6), dpi=180)
+        fig, ax = plt.subplots(figsize=(7.2, 4.6), dpi=180)
         ax.plot(sigmoid_x, sigmoid_y, color='#2563eb', linewidth=2.5, label='Sigmoid curve')
         ax.scatter(
             point_x,
             point_y,
             c=point_colors,
-            s=58,
+            s=60,
             alpha=0.85,
             edgecolors='white',
-            linewidths=0.5,
+            linewidths=0.8,
             zorder=3,
         )
         ax.axhline(risk_threshold, color='#0f172a', linestyle='--', linewidth=1.8, label='Risk boundary')
-        ax.set_title('Binary Risk Threshold Analysis', fontsize=13, pad=6)
+        ax.set_title('Binary Risk Threshold Analysis', fontsize=14, pad=10)
         ax.set_xlabel('Log-Odds Position', fontsize=11)
-        ax.set_ylabel('Predicted Cancellation Probability', fontsize=12)
+        ax.set_ylabel('Predicted Cancellation Probability', fontsize=11)
         ax.set_xlim(-6, 6)
         ax.set_ylim(-0.02, 1.02)
         ax.grid(True, linestyle=':', alpha=0.35)
-        ax.legend(loc='lower right', fontsize=9, frameon=True)
-        fig.subplots_adjust(left=0.16, right=0.98, top=0.90, bottom=0.18)
-        chart_left, chart_center, chart_right = st.columns([0.1, 3.9, 1.0])
-        with chart_center:
+        ax.tick_params(axis='both', labelsize=10)
+        ax.legend(loc='lower right', fontsize=10, frameon=True)
+        fig.subplots_adjust(left=0.12, right=0.98, top=0.88, bottom=0.16)
+        chart_col, info_col = st.columns([3.4, 1.3], gap='large')
+        with chart_col:
             chart_buffer = io.BytesIO()
-            fig.savefig(chart_buffer, format='svg', bbox_inches='tight')
-            chart_svg = chart_buffer.getvalue().decode('utf-8')
-            st.markdown(f"<div style='text-align:center'>{chart_svg}</div>", unsafe_allow_html=True)
-        with chart_right:
+            fig.savefig(chart_buffer, format='png', bbox_inches='tight')
+            chart_buffer.seek(0)
+            st.image(chart_buffer)
+        with info_col:
             st.download_button(
                 label='Download Probability CSV',
                 data=export_csv,
                 file_name='binary_risk_threshold_analysis.csv',
                 mime='text/csv',
-                use_container_width=False,
+                use_container_width=True,
             )
             st.markdown('**Legend**')
             st.markdown('Red: Flagged to cancel subscription')
@@ -1393,16 +1475,21 @@ def step5_test():
         return
 
     st.subheader('Single prediction')
-    features = ss['features']
+    features = ss.get('effective_features') or ss['features']
     if not features:
         st.info('No features selected.')
         return
     input_vals = {}
     cols = st.columns(2)
     for i, f in enumerate(features):
+        series = ss['uploaded_df'][f].dropna()
         dtype = ss['uploaded_df'][f].dtype
         if pd.api.types.is_numeric_dtype(dtype):
-            input_vals[f] = cols[i % 2].number_input(f, value=float(ss['uploaded_df'][f].dropna().median()))
+            if pd.api.types.is_integer_dtype(dtype):
+                default_value = int(round(series.median())) if not series.empty else 0
+                input_vals[f] = cols[i % 2].number_input(f, value=default_value, step=1, format='%d')
+            else:
+                input_vals[f] = cols[i % 2].number_input(f, value=float(series.median()) if not series.empty else 0.0)
         else:
             opts = ss['uploaded_df'][f].dropna().unique().tolist()
             input_vals[f] = cols[i % 2].selectbox(f, options=opts)
@@ -1428,16 +1515,49 @@ def step5_test():
             ss['last_prediction_inputs'] = dict(input_vals)
             ss['last_prediction_summary'] = build_prediction_summary(input_vals, pred[0])
             ss['last_prediction_proba'] = proba[0].tolist() if proba is not None else None
+            ss['last_prediction_classes'] = model.classes_.tolist() if hasattr(model, 'classes_') else None
             ss['last_prediction_refresh_id'] = ss.get('last_prediction_refresh_id', 0) + 1
             st.rerun()
         except Exception as e:
             st.error(readable_exception(e))
 
     if 'last_prediction_value' in ss:
-        st.success(f"Prediction: {ss['last_prediction_value']}")
+        legend_label_lookup = get_target_reference_lookup(ss)
+        prediction_value = ss['last_prediction_value']
+        prediction_label = legend_label_lookup.get(prediction_value)
+        if prediction_label is not None:
+            st.success(f"Prediction: {prediction_value} - {prediction_label}")
+        else:
+            st.success(f"Prediction: {prediction_value}")
         if ss.get('last_prediction_proba') is not None:
             st.write('Confidence / probabilities:')
-            st.write(ss['last_prediction_proba'])
+            probability_values = ss['last_prediction_proba']
+            probability_classes = ss.get('last_prediction_classes') or list(range(len(probability_values)))
+            probability_lines = [
+                f"{class_value}: {probability:.12f}"
+                for class_value, probability in zip(probability_classes, probability_values)
+            ]
+            probability_col, legend_col = st.columns([2.4, 1.8], gap='small')
+            with probability_col:
+                st.markdown(
+                    "<div style='white-space: pre-line; font-family: monospace;'>"
+                    + "<br>".join(_escape_html(line) for line in probability_lines)
+                    + "</div>",
+                    unsafe_allow_html=True,
+                )
+            with legend_col:
+                if legend_label_lookup:
+                    legend_lines = [
+                        f"{class_value}: {legend_label_lookup.get(class_value, class_value)}"
+                        for class_value in probability_classes
+                    ]
+                    st.markdown('**Class legend**')
+                    st.markdown(
+                        "<div style='white-space: pre-line; font-family: monospace;'>"
+                        + "<br>".join(_escape_html(line) for line in legend_lines)
+                        + "</div>",
+                        unsafe_allow_html=True,
+                    )
 
         action_cols = st.columns([5, 1])
         with action_cols[1]:
@@ -1456,6 +1576,7 @@ def main():
 
     init_state()
     ss = st.session_state
+    inject_global_styles()
 
     # Only call the step functions and keep the bottom section
 
