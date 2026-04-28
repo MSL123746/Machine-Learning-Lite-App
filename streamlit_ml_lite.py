@@ -934,41 +934,6 @@ def step4_results():
                     sil_score = silhouette_score(X_scaled, labels)
                 except Exception:
                     sil_score = None
-            st.markdown('<div style="font-weight:600;font-size:1.1rem;margin-bottom:0.7rem;">Model Performance</div>', unsafe_allow_html=True)
-            st.markdown("""
-            <style>
-            .metric-square {
-                background: #fff;
-                border-radius: 10px;
-                border: 1.5px solid #e5e7eb;
-                box-shadow: 0 1px 4px rgba(37,99,235,0.06);
-                min-width: 120px;
-                min-height: 110px;
-                max-width: 160px;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                margin: 0 auto;
-                padding: 0.7rem 0.5rem 0.7rem 0.5rem;
-            }
-            .metric-square .label {
-                color: #64748b;
-                font-size: 0.93rem;
-                font-weight: 500;
-                margin-bottom: 0.2rem;
-                text-align: center;
-                letter-spacing: 0.01em;
-            }
-            .metric-square .value {
-                color: #2563eb;
-                font-size: 1.35rem;
-                font-weight: 700;
-                text-align: center;
-                letter-spacing: 0.01em;
-            }
-            </style>
-            """, unsafe_allow_html=True)
             # Show clustering metrics at the top
             metric_cols = st.columns(5)
             with metric_cols[0]:
@@ -1000,8 +965,7 @@ def step4_results():
             else:
                 if hasattr(model, 'cluster_centers_'):
                     centers_plot = model.cluster_centers_
-            # Make chart 25% larger
-            fig, ax = plt.subplots(figsize=(5.25, 4.0), dpi=180)
+            fig, ax = plt.subplots(figsize=(4.4, 3.25), dpi=160)
             palette = ["#2563eb", "#0ea5e9", "#facc15", "#f472b6", "#22c55e", "#eab308", "#a21caf", "#f43f5e", "#14b8a6", "#64748b"]
             for i, cluster_id in enumerate(sorted(set(labels))):
                 mask_c = labels == cluster_id
