@@ -47,6 +47,13 @@ st.markdown("""
         border: 1.5px solid #e5e7eb !important;
         box-shadow: 0 1px 6px rgba(37,99,235,0.07) !important;
     }
+    /* Hide Streamlit default uploader instructions (e.g. "200MB per file") */
+    div[data-testid="stFileUploaderDropzoneInstructions"],
+    div[data-testid="stFileUploaderDropzoneInstructions"] small,
+    div[data-testid="stFileUploaderDropzoneInstructions"] span,
+    div[data-testid="stFileUploaderDropzoneInstructions"] p {
+        display: none !important;
+    }
     /* Buttons */
     button, div.stButton > button {
         border-radius: 10px !important;
