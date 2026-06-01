@@ -1,5 +1,5 @@
 import streamlit as st
-# New Repo Jan 8, 2026 - First Commit
+# New Repo June 1, 2026 - First Commit
 st.markdown("""
     <style>
     /* Hide uploaded file list in file_uploader for all Streamlit versions */
@@ -398,7 +398,7 @@ def sidebar_steps():
     # All computer vision, DummyClassifier, and test_gray code removed2
 
 def step1_model_and_data():
-    st.header('Welcome to the Machine Learning Training Simulator (2026 Ed.)')
+    st.header('Welcome to the Machine Learning Training Simulator')
     ss = st.session_state
     # ...existing code...
     col1, col2 = st.columns([2, 5])
