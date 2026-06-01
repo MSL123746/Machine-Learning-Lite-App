@@ -47,13 +47,6 @@ st.markdown("""
         border: 1.5px solid #e5e7eb !important;
         box-shadow: 0 1px 6px rgba(37,99,235,0.07) !important;
     }
-    /* Hide Streamlit default uploader instructions (e.g. "200MB per file") */
-    div[data-testid="stFileUploaderDropzoneInstructions"],
-    div[data-testid="stFileUploaderDropzoneInstructions"] small,
-    div[data-testid="stFileUploaderDropzoneInstructions"] span,
-    div[data-testid="stFileUploaderDropzoneInstructions"] p {
-        display: none !important;
-    }
     /* Buttons */
     button, div.stButton > button {
         border-radius: 10px !important;
@@ -1110,11 +1103,11 @@ def step4_results():
         with cols[3]:
             st.markdown(f'<div class="metric-square"><div class="label">ACCURACY</div><div class="value">{safe_metric(metrics.get("accuracy"))}</div></div>', unsafe_allow_html=True)
         with cols[4]:
-            st.markdown(f'<div class="metric-square"><div class="label">PRECISION (MACRO)</div><div class="value">{safe_metric(metrics.get("precision"))}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">PRECISION</div><div class="value">{safe_metric(metrics.get("precision"))}</div></div>', unsafe_allow_html=True)
         with cols[5]:
-            st.markdown(f'<div class="metric-square"><div class="label">RECALL (MACRO)</div><div class="value">{safe_metric(metrics.get("recall"))}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">RECALL</div><div class="value">{safe_metric(metrics.get("recall"))}</div></div>', unsafe_allow_html=True)
         with cols[6]:
-            st.markdown(f'<div class="metric-square"><div class="label">F1 (MACRO)</div><div class="value">{safe_metric(metrics.get("f1"))}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-square"><div class="label">F1 SCORE</div><div class="value">{safe_metric(metrics.get("f1"))}</div></div>', unsafe_allow_html=True)
 
         # Show confusion matrix and ROC curve for binary, confusion matrix for multi-class
         if ss.get('_y_val') is not None:
