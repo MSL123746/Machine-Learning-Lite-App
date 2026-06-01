@@ -47,6 +47,16 @@ st.markdown("""
         border: 1.5px solid #e5e7eb !important;
         box-shadow: 0 1px 6px rgba(37,99,235,0.07) !important;
     }
+    /* Hide Streamlit default uploader helper text (e.g. "200MB per file") */
+    div[data-testid="stFileUploaderDropzoneInstructions"],
+    div[data-testid="stFileUploaderDropzoneInstructions"] * {
+        display: none !important;
+    }
+    /* Fallback selectors for Streamlit variants that render size/type hint in small/p text */
+    div[data-testid="stFileUploaderDropzone"] small,
+    div[data-testid="stFileUploaderDropzone"] p {
+        display: none !important;
+    }
     /* Buttons */
     button, div.stButton > button {
         border-radius: 10px !important;
