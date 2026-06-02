@@ -1,5 +1,5 @@
 import streamlit as st
-# New Repo Jan 8, 2026 - First Commit
+# New Repo June 1, 2026 - First Commit
 st.markdown("""
     <style>
     /* Hide uploaded file list in file_uploader for all Streamlit versions */
@@ -46,6 +46,16 @@ st.markdown("""
         background: #f1f5f9 !important;
         border: 1.5px solid #e5e7eb !important;
         box-shadow: 0 1px 6px rgba(37,99,235,0.07) !important;
+    }
+    /* Hide Streamlit default uploader helper text (e.g. "200MB per file") */
+    div[data-testid="stFileUploaderDropzoneInstructions"],
+    div[data-testid="stFileUploaderDropzoneInstructions"] * {
+        display: none !important;
+    }
+    /* Fallback selectors for Streamlit variants that render size/type hint in small/p text */
+    div[data-testid="stFileUploaderDropzone"] small,
+    div[data-testid="stFileUploaderDropzone"] p {
+        display: none !important;
     }
     /* Buttons */
     button, div.stButton > button {
@@ -98,7 +108,7 @@ def init_state():
     if 'step' not in ss:
         ss['step'] = 1
     defaults = {
-        'algorithm': 'Linear Regression',
+        'algorithm': 'Random Forest Regression',
         'model_type': 'Regression',
         'uploaded_df': None,
         'df_sample': None,
@@ -204,6 +214,7 @@ import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder
  
 from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.ensemble import RandomForestRegressor
 import numpy as np
 from sklearn.metrics import (
     accuracy_score,
@@ -337,6 +348,13 @@ def readable_exception(e: Exception):
     return f"Error: {str(e)}"
 
 
+def build_prediction_summary(input_vals, prediction):
+    lines = [f"Prediction: {prediction}", "", "Inputs:"]
+    for key, value in input_vals.items():
+        lines.append(f"- {key}: {value}")
+    return "\n".join(lines)
+
+
 
 
 
@@ -350,15 +368,15 @@ def sidebar_steps():
             ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
             ('Stage 2', 'Split Data', 'Select train fraction and algorithm settings.'),
             ('Stage 3', 'Training', 'Start training and view logs/progress.'),
-            ('Stage 4', 'Results', 'Inspect metrics and download model.'),
+            ('Stage 4', 'Scoring', 'Inspect metrics and download model.'),
         ]
     else:
         steps = [
             ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
             ('Stage 2', 'Split Data', 'Select train fraction and algorithm settings.'),
             ('Stage 3', 'Training', 'Start training and view logs/progress.'),
-            ('Stage 4', 'Results', 'Inspect metrics and download model.'),
-            ('Stage 5', 'Test Model', 'Make single or batch predictions.'),
+            ('Stage 4', 'Scoring', 'Inspect metrics and download model.'),
+            ('Stage 5', 'Evaluate', 'Make single or batch predictions.'),
         ]
 
     def set_step(idx):
@@ -390,7 +408,7 @@ def sidebar_steps():
     # All computer vision, DummyClassifier, and test_gray code removed2
 
 def step1_model_and_data():
-    st.header('Welcome to the Machine Learning Simulator 02092026')
+    st.header('Welcome to the Machine Learning Training Simulator')
     ss = st.session_state
     # ...existing code...
     col1, col2 = st.columns([2, 5])
@@ -435,7 +453,10 @@ def step1_model_and_data():
             st.button('Reset', on_click=reset_selections, help='Clear uploaded data and start over')
         # If reset, hide selectors and data preview
         if ss.get('uploaded_df') is not None:
-            df = ss['df_sample']
+            df = ss.get('df_sample')
+            if df is None or getattr(df, 'empty', False):
+                df = ss['uploaded_df']
+                ss['df_sample'] = df.copy()
 
             # --- Feature/target selection logic (restored) ---
             def is_valid_feature_select(col):
@@ -524,8 +545,10 @@ def step1_model_and_data():
             # --- Always show Data Preview after upload ---
             st.markdown('---')
             st.subheader('Data Preview')
-            # Always show the original uploaded DataFrame, not filtered by features
-            preview_df = ss['uploaded_df'] if 'uploaded_df' in ss and ss['uploaded_df'] is not None else df
+            preview_df = ss.get('df_sample')
+            if preview_df is None or getattr(preview_df, 'empty', False):
+                preview_df = ss.get('uploaded_df')
+
             if preview_df is not None and not preview_df.empty:
                 gb = GridOptionsBuilder.from_dataframe(preview_df)
                 gb.configure_default_column(enablePivot=True, enableValue=True, enableRowGroup=True)
@@ -554,6 +577,20 @@ def step2_settings():
         ss['settings']['train_frac'] = split / 100.0
         scale = st.checkbox('Standardize numeric features', value=True)
         ss['settings']['scale'] = bool(scale)
+        if ss.get('model_type') == 'Regression':
+            reg_options = ['Random Forest Regression', 'Linear Regression']
+            current_alg = ss['settings'].get('algorithm', ss.get('algorithm', reg_options[0]))
+            if current_alg not in reg_options:
+                current_alg = reg_options[0]
+            selected_alg = st.selectbox('Regression algorithm', reg_options, index=reg_options.index(current_alg))
+            ss['settings']['algorithm'] = selected_alg
+            ss['algorithm'] = selected_alg
+        elif ss.get('model_type') == 'Binary classification':
+            ss['settings']['algorithm'] = 'Logistic Regression (Binary)'
+            ss['algorithm'] = 'Logistic Regression (Binary)'
+        elif ss.get('model_type') == 'Multi-class classification':
+            ss['settings']['algorithm'] = 'Logistic Regression (Multi-class)'
+            ss['algorithm'] = 'Logistic Regression (Multi-class)'
         # Show number of training and testing rows
         if ss['uploaded_df'] is not None and ss['features'] is not None:
             df = ss['uploaded_df']
@@ -706,20 +743,26 @@ def step3_training():
             log(f'Stored {len(ss["training_columns"])} training feature columns for later alignment.')
             p.progress(60)
             # choose model
-            alg = ss['settings'].get('algorithm')
+            alg = ss['settings'].get('algorithm', ss.get('algorithm'))
             model = None
             if ss['model_type'] == 'Regression':
-                if alg == 'Linear Regression' or alg is None:
+                if alg == 'Linear Regression':
                     model = LinearRegression()
                     log('Fitting Linear Regression...')
+                else:
+                    model = RandomForestRegressor(
+                        n_estimators=250,
+                        max_depth=8,
+                        min_samples_leaf=3,
+                        random_state=42,
+                    )
+                    log('Fitting Random Forest Regression...')
             elif ss['model_type'] == 'Binary classification':
-                if alg == 'Logistic Regression (Binary)' or alg is None:
-                    model = LogisticRegression(C=ss['settings'].get('C', 1.0), max_iter=500, solver='lbfgs')
-                    log('Fitting Logistic Regression (Binary)...')
+                model = LogisticRegression(C=ss['settings'].get('C', 1.0), max_iter=500, solver='lbfgs')
+                log('Fitting Logistic Regression (Binary)...')
             else:  # Multi-class classification
-                if alg == 'Logistic Regression (Multi-class)' or alg is None:
-                    model = LogisticRegression(C=ss['settings'].get('C', 1.0), max_iter=500, solver='lbfgs')
-                    log('Fitting Logistic Regression (Multi-class)...')
+                model = LogisticRegression(C=ss['settings'].get('C', 1.0), max_iter=500, solver='lbfgs')
+                log('Fitting Logistic Regression (Multi-class)...')
             if model is None:
                 log('No valid algorithm selected. Defaulting to Linear Regression.')
                 model = LinearRegression()
@@ -793,7 +836,7 @@ def step4_results():
         st.info('No trained model available. Complete Step 3 first.')
         return
     model = ss['trained_model']
-    metrics = ss.get('metrics', {})
+    metrics = ss.get('metrics', {}) or {}
     # --- Modern card-style metrics layout ---
     st.markdown('<div style="font-weight:600;font-size:1.1rem;margin-bottom:0.7rem;">Model Performance</div>', unsafe_allow_html=True)
     st.markdown("""
@@ -889,15 +932,17 @@ def step4_results():
             </style>
             """, unsafe_allow_html=True)
             # Show clustering metrics at the top
-            metric_cols = st.columns(4)
+            metric_cols = st.columns(5)
             with metric_cols[0]:
                 st.markdown(f'<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">clustering</div></div>', unsafe_allow_html=True)
             with metric_cols[1]:
-                st.markdown(f'<div class="metric-square"><div class="label">CLUSTERS</div><div class="value">{n_clusters if n_clusters is not None else "-"}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-square"><div class="label">TRAINING SAMPLES</div><div class="value">{len(ss["uploaded_df"])} </div></div>', unsafe_allow_html=True)
             with metric_cols[2]:
+                st.markdown(f'<div class="metric-square"><div class="label">CLUSTERS</div><div class="value">{n_clusters if n_clusters is not None else "-"}</div></div>', unsafe_allow_html=True)
+            with metric_cols[3]:
                 inertia_val = f"{inertia:.3f}" if inertia is not None else "-"
                 st.markdown(f'<div class="metric-square"><div class="label">INERTIA</div><div class="value">{inertia_val}</div></div>', unsafe_allow_html=True)
-            with metric_cols[3]:
+            with metric_cols[4]:
                 sil_val = f"{sil_score:.3f}" if sil_score is not None else "-"
                 st.markdown(f'<div class="metric-square"><div class="label">SILHOUETTE</div><div class="value">{sil_val}</div></div>', unsafe_allow_html=True)
             # ...existing chart and table code...
@@ -987,28 +1032,7 @@ def step4_results():
         with cols[6]:
             st.markdown(f'<div class="metric-square"><div class="label">R² SCORE</div><div class="value">{safe_metric(metrics.get("R2"))}</div></div>', unsafe_allow_html=True)
     else:
-        cols = st.columns(7)
-        def safe_metric(val, fmt=".3f"):
-            try:
-                if val is None:
-                    return "-"
-                return f"{val:{fmt}}"
-            except Exception:
-                return "-"
-        with cols[0]:
-            st.markdown('<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">classification</div></div>', unsafe_allow_html=True)
-        with cols[1]:
-            st.markdown(f'<div class="metric-square"><div class="label">TRAINING SAMPLES</div><div class="value">{len(ss["uploaded_df"])} </div></div>', unsafe_allow_html=True)
-        with cols[2]:
-            st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(ss["features"])} </div></div>', unsafe_allow_html=True)
-        with cols[3]:
-            st.markdown(f'<div class="metric-square"><div class="label">ACCURACY</div><div class="value">{safe_metric(metrics.get("accuracy"))}</div></div>', unsafe_allow_html=True)
-        with cols[4]:
-            st.markdown(f'<div class="metric-square"><div class="label">PRECISION (MACRO)</div><div class="value">{safe_metric(metrics.get("precision"))}</div></div>', unsafe_allow_html=True)
-        with cols[5]:
-            st.markdown(f'<div class="metric-square"><div class="label">RECALL (MACRO)</div><div class="value">{safe_metric(metrics.get("recall"))}</div></div>', unsafe_allow_html=True)
-        with cols[6]:
-            st.markdown(f'<div class="metric-square"><div class="label">F1 (MACRO)</div><div class="value">{safe_metric(metrics.get("f1"))}</div></div>', unsafe_allow_html=True)
+        pass  # No metrics to display for this case
 
     # --- Keep the rest of the visuals and plots as before ---
     if ss['model_type'] == 'Regression':
@@ -1028,7 +1052,6 @@ def step4_results():
             y_true = df[target].values
             y_pred = ss['trained_model'].predict(X_encoded)
             # Show predicted value (first sample) in blue and bold
-            st.markdown(f"<span style='font-size:1.1em;font-weight:600;'>Predicted Value (first row): <span style='color:#2563eb;font-weight:700;'>{y_pred[0]:.3f}</span></span>", unsafe_allow_html=True)
             # Prepare plots side-by-side using validation set
             col1, col2 = st.columns(2)
             X_val = ss.get('_X_val')
@@ -1072,6 +1095,30 @@ def step4_results():
             else:
                 st.warning('Validation data not available for plotting. Please retrain the model.')
     elif ss['model_type'] in ('Binary classification', 'Multi-class classification'):
+        # Show classification metrics at the top
+        cols = st.columns(7)
+        def safe_metric(val, fmt=".3f"):
+            try:
+                if val is None:
+                    return "-"
+                return f"{val:{fmt}}"
+            except Exception:
+                return "-"
+        with cols[0]:
+            st.markdown('<div class="metric-square"><div class="label">MODEL TYPE</div><div class="value">classification</div></div>', unsafe_allow_html=True)
+        with cols[1]:
+            st.markdown(f'<div class="metric-square"><div class="label">TRAINING SAMPLES</div><div class="value">{len(ss["uploaded_df"])} </div></div>', unsafe_allow_html=True)
+        with cols[2]:
+            st.markdown(f'<div class="metric-square"><div class="label">FEATURES USED</div><div class="value">{len(ss["features"])} </div></div>', unsafe_allow_html=True)
+        with cols[3]:
+            st.markdown(f'<div class="metric-square"><div class="label">ACCURACY</div><div class="value">{safe_metric(metrics.get("accuracy"))}</div></div>', unsafe_allow_html=True)
+        with cols[4]:
+            st.markdown(f'<div class="metric-square"><div class="label">PRECISION</div><div class="value">{safe_metric(metrics.get("precision"))}</div></div>', unsafe_allow_html=True)
+        with cols[5]:
+            st.markdown(f'<div class="metric-square"><div class="label">RECALL</div><div class="value">{safe_metric(metrics.get("recall"))}</div></div>', unsafe_allow_html=True)
+        with cols[6]:
+            st.markdown(f'<div class="metric-square"><div class="label">F1 SCORE</div><div class="value">{safe_metric(metrics.get("f1"))}</div></div>', unsafe_allow_html=True)
+
         # Show confusion matrix and ROC curve for binary, confusion matrix for multi-class
         if ss.get('_y_val') is not None:
             y_val = ss['_y_val']
@@ -1129,26 +1176,42 @@ def step4_results():
                 if hasattr(ss['trained_model'], 'classes_'):
                     class_labels = ss['trained_model'].classes_
                 import io
-                fig, ax = plt.subplots(figsize=(3, 2.5), dpi=150)
-                disp = ConfusionMatrixDisplay.from_predictions(
-                    y_val, y_pred,
-                    display_labels=class_labels,
+                is_multiclass = ss['model_type'] == 'Multi-class classification'
+                observed_labels = list(np.unique(np.concatenate([np.asarray(y_val), np.asarray(y_pred)])))
+                if class_labels is None:
+                    plot_labels = observed_labels
+                else:
+                    overlapping_labels = [label for label in class_labels if label in observed_labels]
+                    plot_labels = overlapping_labels if overlapping_labels else observed_labels
+                display_labels = plot_labels
+                if is_multiclass:
+                    display_labels = list(range(len(plot_labels)))
+                fig, ax = plt.subplots(figsize=(4.6, 3.8) if is_multiclass else (3, 2.5), dpi=150)
+                cm = confusion_matrix(y_val, y_pred, labels=plot_labels)
+                disp = ConfusionMatrixDisplay(
+                    confusion_matrix=cm,
+                    display_labels=display_labels,
+                )
+                disp.plot(
                     cmap=plt.cm.Blues,
                     ax=ax,
                     colorbar=True,
-                    values_format='.2g' if ss['model_type'] == 'Multi-class classification' else None
+                    values_format='.2g' if is_multiclass else None,
                 )
-                # Fix tick mismatch error
-                n_labels = len(class_labels) if class_labels is not None else 0
-                ax.set_xticks(range(n_labels))
-                ax.set_yticks(range(n_labels))
-                ax.set_title('Confusion Matrix', fontsize=9 if ss['model_type'] == 'Multi-class classification' else 12, pad=5)
-                ax.set_xlabel('Predicted label', fontsize=8 if ss['model_type'] == 'Multi-class classification' else 10, labelpad=4)
-                ax.set_ylabel('True label', fontsize=8 if ss['model_type'] == 'Multi-class classification' else 10, labelpad=4)
-                ax.tick_params(axis='both', labelsize=7 if ss['model_type'] == 'Multi-class classification' else 9, length=2)
-                if ss['model_type'] == 'Multi-class classification':
+                ax.set_title('Confusion' \
+                ' Matrix', fontsize=10 if is_multiclass else 12, pad=6)
+                ax.set_xlabel('Predicted label', fontsize=8 if is_multiclass else 10, labelpad=4)
+                ax.set_ylabel('True label', fontsize=8 if is_multiclass else 10, labelpad=4)
+                ax.tick_params(axis='both', labelsize=8 if is_multiclass else 9, length=2)
+                if is_multiclass:
+                    plt.setp(ax.get_xticklabels(), rotation=0, ha='center')
+                    plt.setp(ax.get_yticklabels(), rotation=0)
+                    if getattr(disp, 'text_', None) is not None:
+                        for text in disp.text_.ravel():
+                            if text is not None:
+                                text.set_fontsize(7)
                     cb = ax.figure.axes[-1]
-                    cb.tick_params(labelsize=7, length=2)
+                    cb.tick_params(labelsize=6, length=2)
                     fig.tight_layout(pad=0.5)
                 else:
                     fig.tight_layout()
@@ -1156,12 +1219,35 @@ def step4_results():
                 fig.savefig(buf, format='png', bbox_inches='tight')
                 plt.close(fig)
                 buf.seek(0)
-                st.image(buf)
+                if is_multiclass:
+                    chart_col, legend_col, spacer_col = st.columns([3.6, 1.7, 1.2], gap="small")
+                    with chart_col:
+                        st.image(buf)
+                    with legend_col:
+                        legend_lines = [f"{index}: {label}" for index, label in enumerate(plot_labels)]
+                        st.markdown(
+                            "<div style='margin-top: 0.6rem; margin-left: -18px;'></div>",
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown(
+                            "<div style='font-size: 1.6rem; color: #6b7280; margin-bottom: 0.35rem; margin-left: -18px; font-weight: 600;'>Class Legend</div>",
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown(
+                            "<div style='white-space: pre-line; font-family: monospace; font-size: 1.7rem; line-height: 1.5; margin-left: -18px;'>"
+                            + "<br>".join(legend_lines)
+                            + "</div>",
+                            unsafe_allow_html=True,
+                        )
+                    with spacer_col:
+                        st.empty()
+                else:
+                    st.image(buf)
     # Removed Model artifacts and download buttons as requested
 
     # --- Data Integrity & Correlation Section ---
     ss = st.session_state
-    if ss.get('model_type') in ['Regression', 'Binary classification', 'Multi-class classification'] and ss.get('uploaded_df') is not None:
+    if ss.get('model_type') in ['Regression', 'Binary classification'] and ss.get('uploaded_df') is not None:
         st.markdown('---')
         st.markdown('## Data Integrity & Correlation')
         import pandas as pd
@@ -1246,12 +1332,30 @@ def step5_test():
                 proba = model.predict_proba(X)
             else:
                 proba = None
-            st.success(f'Prediction: {pred[0]}')
-            if proba is not None:
-                st.write('Confidence / probabilities:')
-                st.write(proba[0].tolist())
+            ss['last_prediction_value'] = pred[0]
+            ss['last_prediction_inputs'] = dict(input_vals)
+            ss['last_prediction_summary'] = build_prediction_summary(input_vals, pred[0])
+            ss['last_prediction_proba'] = proba[0].tolist() if proba is not None else None
+            ss['last_prediction_refresh_id'] = ss.get('last_prediction_refresh_id', 0) + 1
+            st.rerun()
         except Exception as e:
             st.error(readable_exception(e))
+
+    if 'last_prediction_value' in ss:
+        st.success(f"Prediction: {ss['last_prediction_value']}")
+        if ss.get('last_prediction_proba') is not None:
+            st.write('Confidence / probabilities:')
+            st.write(ss['last_prediction_proba'])
+
+        action_cols = st.columns([5, 1])
+        with action_cols[1]:
+            with st.popover('Copy Summary'):
+                st.text_area(
+                    'Copy this text',
+                    value=ss.get('last_prediction_summary', ''),
+                    height=220,
+                    key=f"prediction_summary_text_area_{ss.get('last_prediction_refresh_id', 0)}"
+                )
     # Batch predictions feature removed
 
 
