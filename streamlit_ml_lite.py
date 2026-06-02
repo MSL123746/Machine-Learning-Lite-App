@@ -1368,44 +1368,7 @@ def main():
 
     # Only call the step functions and keep the bottom section
 
-    # Inject a small JS snippet that hides floating sidebar hover controls which
-    # sometimes appear as a blue rounded box. This uses heuristics on computed
-    # styles (fixed/absolute position + gradient background) and a MutationObserver
-    # so newly-created controls are removed immediately.
-    st.components.v1.html(
-        """
-        <script>
-        (function(){
-            function hideBlueControls(){
-                        try{
-                            var nodes = Array.from(document.querySelectorAll('body *'));
-                            nodes.forEach(function(el){
-                                try{
-                                    var cs = window.getComputedStyle(el);
-                                    if((cs.position === 'fixed' || cs.position === 'absolute') && cs.backgroundImage && cs.backgroundImage.indexOf('gradient') !== -1){
-                                        var w = el.offsetWidth || 0;
-                                        var h = el.offsetHeight || 0;
-                                        if(w > 16 && w < 260 && h > 16 && h < 160){
-                                            el.style.setProperty('display','none','important');
-                                            el.style.setProperty('visibility','hidden','important');
-                                            el.style.setProperty('pointer-events','none','important');
-                                            el.dataset.mllite_hidden = '1';
-                                        }
-                                    }
-                                }catch(e){}
-                            });
-                        }catch(e){}
-                    }
-                    var obs = new MutationObserver(hideBlueControls);
-                    obs.observe(document.body, { childList: true, subtree: true, attributes: true });
-                    document.addEventListener('mousemove', hideBlueControls, true);
-                    setTimeout(hideBlueControls, 250);
-                    setInterval(hideBlueControls, 2000);
-                })();
-                </script>
-                """,
-                height=0,
-        )
+    # Removed deprecated st.components.v1.html injection to avoid deployment failures.
     sidebar_steps()
     # Help slider removed
     step = st.session_state['step']
