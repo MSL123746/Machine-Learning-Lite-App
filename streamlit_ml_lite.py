@@ -103,6 +103,8 @@ import sys
 print(f"Python executable: {sys.executable}")
 print(f"Python version: {sys.version}")
 
+DEPLOY_MARKER = "Build: 2026-06-02.1"
+
 def init_state():
     ss = st.session_state
     if 'step' not in ss:
@@ -1365,6 +1367,7 @@ def main():
 
     init_state()
     ss = st.session_state
+    st.sidebar.caption(DEPLOY_MARKER)
 
     # Only call the step functions and keep the bottom section
 
