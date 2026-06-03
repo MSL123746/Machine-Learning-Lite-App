@@ -1411,7 +1411,15 @@ def step5_test():
                         "</div>",
                         unsafe_allow_html=True
                     )
-                    prob_df = pd.DataFrame({'Probability': proba_full, 'Flagged': proba_full >= threshold})
+                    prob_df = df.copy().reset_index(drop=True)
+                    prob_df = prob_df.drop(columns=[c for c in prob_df.columns if c == '::auto_unique_id::'], errors='ignore')
+                    prob_df['Probability'] = proba_full
+                    prob_df['Risk_Threshold'] = threshold
+                    prob_df['Risk_Flag'] = ['Flagged' if p >= threshold else 'Safe' for p in proba_full]
+                    prob_df['Risk_Customer_Status'] = [
+                        'Flagged to cancel subscription' if p >= threshold else 'Happy subscriber'
+                        for p in proba_full
+                    ]
                     csv_bytes = prob_df.to_csv(index=False).encode('utf-8')
                     st.download_button(
                         label='Download Probability CSV',
