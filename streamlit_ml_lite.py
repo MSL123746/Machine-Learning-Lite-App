@@ -207,6 +207,8 @@ import json
 import pickle
 import tempfile
 import time
+import zipfile
+from xml.sax.saxutils import escape as xml_escape
 from typing import Optional
 
 import numpy as np
@@ -355,6 +357,106 @@ def build_prediction_summary(input_vals, prediction):
     for key, value in input_vals.items():
         lines.append(f"- {key}: {value}")
     return "\n".join(lines)
+
+
+def dataframe_to_xlsx_bytes(df: pd.DataFrame, sheet_name: str = 'Sheet1') -> bytes:
+    def column_letter(index: int) -> str:
+        result = ''
+        index += 1
+        while index:
+            index, remainder = divmod(index - 1, 26)
+            result = chr(65 + remainder) + result
+        return result
+
+    def cell_xml(value, ref: str) -> str:
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            return f'<c r="{ref}"/>'
+        if isinstance(value, bool):
+            return f'<c r="{ref}" t="b"><v>{int(value)}</v></c>'
+        if isinstance(value, (int, float)) and not pd.isna(value):
+            return f'<c r="{ref}"><v>{value}</v></c>'
+        return f'<c r="{ref}" t="inlineStr"><is><t>{xml_escape(str(value))}</t></is></c>'
+
+    rows_xml = []
+    headers = list(df.columns)
+    header_cells = []
+    for idx, header in enumerate(headers):
+        ref = f"{column_letter(idx)}1"
+        header_cells.append(f'<c r="{ref}" t="inlineStr"><is><t>{xml_escape(str(header))}</t></is></c>')
+    rows_xml.append(f'<row r="1">{"".join(header_cells)}</row>')
+
+    for row_idx, (_, row) in enumerate(df.iterrows(), start=2):
+        cells = []
+        for col_idx, value in enumerate(row.tolist()):
+            ref = f"{column_letter(col_idx)}{row_idx}"
+            cells.append(cell_xml(value, ref))
+        rows_xml.append(f'<row r="{row_idx}">{"".join(cells)}</row>')
+
+    sheet_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        f'<sheetData>{"".join(rows_xml)}</sheetData>'
+        '</worksheet>'
+    )
+
+    workbook_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        f'<sheets><sheet name="{xml_escape(sheet_name)}" sheetId="1" r:id="rId1"/></sheets>'
+        '</workbook>'
+    )
+
+    workbook_rels_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+        'Target="worksheets/sheet1.xml"/>'
+        '</Relationships>'
+    )
+
+    root_rels_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+        'Target="xl/workbook.xml"/>'
+        '</Relationships>'
+    )
+
+    content_types_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        '</Types>'
+    )
+
+    styles_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
+        '<fills count="1"><fill><patternFill patternType="none"/></fill></fills>'
+        '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>'
+        '</styleSheet>'
+    )
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr('[Content_Types].xml', content_types_xml)
+        archive.writestr('_rels/.rels', root_rels_xml)
+        archive.writestr('xl/workbook.xml', workbook_xml)
+        archive.writestr('xl/_rels/workbook.xml.rels', workbook_rels_xml)
+        archive.writestr('xl/worksheets/sheet1.xml', sheet_xml)
+        archive.writestr('xl/styles.xml', styles_xml)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 
 
@@ -1404,29 +1506,38 @@ def step5_test():
                     st.markdown(f"<div style='width:100%;text-align:center'>{svg_rt}</div>", unsafe_allow_html=True)
                 with chart_cols[1]:
                     st.write('')
-                    st.markdown(
-                        "<div style='margin-top:1.5rem;font-size:0.9rem'>"
-                        "<span style='color:red;font-weight:600'>Red:</span> Flagged to cancel subscription<br>"
-                        "<span style='color:green;font-weight:600'>Green:</span> Happy subscriber"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
                     prob_df = df.copy().reset_index(drop=True)
                     prob_df = prob_df.drop(columns=[c for c in prob_df.columns if c == '::auto_unique_id::'], errors='ignore')
                     prob_df['Probability'] = proba_full
-                    prob_df['Risk_Threshold'] = threshold
+                    prob_df['Risk_Threshold'] = [round(float(p), 1) for p in proba_full]
                     prob_df['Risk_Flag'] = ['Flagged' if p >= threshold else 'Safe' for p in proba_full]
                     prob_df['Risk_Customer_Status'] = [
                         'Flagged to cancel subscription' if p >= threshold else 'Happy subscriber'
                         for p in proba_full
                     ]
-                    csv_bytes = prob_df.to_csv(index=False).encode('utf-8')
+                    xlsx_bytes = dataframe_to_xlsx_bytes(prob_df, sheet_name='Risk Analysis')
                     st.download_button(
                         label='Download Probability CSV',
-                        data=csv_bytes,
-                        file_name='risk_probabilities.csv',
-                        mime='text/csv',
+                        data=xlsx_bytes,
+                        file_name='risk_probabilities.xlsx',
+                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                         key='download_prob_csv'
+                    )
+                    st.caption('Download is exported as an Excel file (.xlsx) instead of CSV.')
+                    st.markdown(
+                        "<div style='font-size:0.9rem;color:#000;'>"
+                        "<div style='font-weight:700;margin-bottom:0.2rem;'>Legend</div>"
+                        "<span style='color:#dc2626;font-weight:700;'>Red:</span> "
+                        "<span style='color:#000;'>Flagged to cancel subscription</span>"
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        "<div style='font-size:0.9rem;color:#000;'>"
+                        "<span style='color:#16a34a;font-weight:700;'>Green:</span> "
+                        "<span style='color:#000;'>Happy subscriber</span>"
+                        "</div>",
+                        unsafe_allow_html=True,
                     )
                 st.markdown('---')
             except Exception as e:
