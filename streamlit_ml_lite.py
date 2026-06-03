@@ -474,19 +474,34 @@ def step1_model_and_data():
             if prev_features is None:
                 prev_features = []
             safe_defaults = [f for f in prev_features if f in cols]
+            feature_options = ['Select All'] + cols
 
-            select_col1, select_col2 = st.columns([1, 1])
-            with select_col1:
-                if st.button('Select All Features', key='select_all_features_btn'):
-                    st.session_state['feature_select'] = cols
-                    st.rerun()
-            with select_col2:
-                if st.button('Clear Features', key='clear_features_btn'):
-                    st.session_state['feature_select'] = []
-                    st.rerun()
+            if 'feature_select_values' not in ss:
+                ss['feature_select_values'] = safe_defaults
+            else:
+                ss['feature_select_values'] = [f for f in ss['feature_select_values'] if f in cols]
+            if 'feature_select_widget_ver' not in ss:
+                ss['feature_select_widget_ver'] = 0
+            feature_widget_key = f"feature_select_{ss['feature_select_widget_ver']}"
+
+            if st.button('Clear Features', key='clear_features_btn'):
+                ss['feature_select_values'] = []
+                ss['feature_select_widget_ver'] += 1
+                st.rerun()
 
             if ss['model_type'] == 'Clustering':
-                features = st.multiselect('Select feature columns', options=cols, default=safe_defaults, key='feature_select')
+                raw_features = st.multiselect(
+                    'Select feature columns',
+                    options=feature_options,
+                    default=ss.get('feature_select_values', safe_defaults),
+                    key=feature_widget_key,
+                )
+                if 'Select All' in raw_features:
+                    ss['feature_select_values'] = cols
+                    ss['feature_select_widget_ver'] += 1
+                    st.rerun()
+                features = [f for f in raw_features if f in cols]
+                ss['feature_select_values'] = features
                 ss['features'] = features
                 ss['target'] = None
                 if features:
@@ -524,7 +539,18 @@ def step1_model_and_data():
                     )
                 target_cols = [c for c in list(ss['uploaded_df'].columns) if is_valid_target_select(c)]
                 target = st.selectbox('Select target column', options=["Select a target..."] + target_cols, index=0, key='target_select')
-                features = st.multiselect('Select feature columns', options=cols, default=safe_defaults, key='feature_select')
+                raw_features = st.multiselect(
+                    'Select feature columns',
+                    options=feature_options,
+                    default=ss.get('feature_select_values', safe_defaults),
+                    key=feature_widget_key,
+                )
+                if 'Select All' in raw_features:
+                    ss['feature_select_values'] = cols
+                    ss['feature_select_widget_ver'] += 1
+                    st.rerun()
+                features = [f for f in raw_features if f in cols]
+                ss['feature_select_values'] = features
                 selected_target = st.session_state.get('target_select')
                 if selected_target is not None and selected_target != "Select a target..." and str(selected_target).strip() != '':
                     ss['target'] = selected_target
