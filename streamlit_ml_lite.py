@@ -1456,15 +1456,23 @@ def step5_test():
                         X_full[num_cols_sc] = scaler.transform(X_full[num_cols_sc])
                 proba_full = model.predict_proba(X_full)[:, 1]
 
+                x_val_for_eval = ss.get('_X_val')
+                if x_val_for_eval is not None and len(x_val_for_eval) > 0:
+                    proba_eval = model.predict_proba(x_val_for_eval)[:, 1]
+                    df_eval = df.loc[x_val_for_eval.index].copy()
+                else:
+                    proba_eval = proba_full
+                    df_eval = df.copy()
+
                 threshold = st.slider(
                     'Risk Tolerance',
                     min_value=0.0, max_value=1.0, value=0.50, step=0.01,
                     key='risk_threshold_slider'
                 )
 
-                flagged = int((proba_full >= threshold).sum())
-                safe = int((proba_full < threshold).sum())
-                total = len(proba_full)
+                flagged = int((proba_eval >= threshold).sum())
+                safe = int((proba_eval < threshold).sum())
+                total = len(proba_eval)
                 flagged_rate = flagged / total * 100 if total > 0 else 0.0
 
                 st.subheader('Risk Threshold Analysis')
@@ -1477,16 +1485,16 @@ def step5_test():
 
                 # Binary Risk Threshold Analysis chart
                 eps = 1e-7
-                proba_clipped = np.clip(proba_full, eps, 1 - eps)
+                proba_clipped = np.clip(proba_eval, eps, 1 - eps)
                 log_odds = np.log(proba_clipped / (1 - proba_clipped))
-                colors = ['red' if p >= threshold else 'green' for p in proba_full]
+                colors = ['red' if p >= threshold else 'green' for p in proba_eval]
 
                 x_min, x_max = log_odds.min(), log_odds.max()
                 x_curve = np.linspace(x_min, x_max, 300)
                 y_curve = 1 / (1 + np.exp(-x_curve))
 
                 fig_rt, ax_rt = plt.subplots(figsize=(8, 4.5), dpi=140)
-                for xi, yi, ci in zip(log_odds, proba_full, colors):
+                for xi, yi, ci in zip(log_odds, proba_eval, colors):
                     ax_rt.scatter(xi, yi, color=ci, alpha=0.6, s=20, zorder=2)
                 ax_rt.plot(x_curve, y_curve, color='steelblue', linewidth=2, label='Sigmoid curve', zorder=3)
                 ax_rt.axhline(y=threshold, color='black', linestyle='--', linewidth=1.5, label='Risk boundary', zorder=3)
@@ -1506,14 +1514,17 @@ def step5_test():
                     st.markdown(f"<div style='width:100%;text-align:center'>{svg_rt}</div>", unsafe_allow_html=True)
                 with chart_cols[1]:
                     st.write('')
-                    prob_df = df.copy().reset_index(drop=True)
+                    prob_export = proba_eval
+                    prob_df = df_eval.copy()
+
+                    prob_df = prob_df.reset_index(drop=True)
                     prob_df = prob_df.drop(columns=[c for c in prob_df.columns if c == '::auto_unique_id::'], errors='ignore')
-                    prob_df['Probability'] = proba_full
-                    prob_df['Risk_Threshold'] = [round(float(p), 1) for p in proba_full]
-                    prob_df['Risk_Flag'] = ['Flagged' if p >= threshold else 'Safe' for p in proba_full]
+                    prob_df['Probability'] = prob_export
+                    prob_df['Risk_Threshold'] = [round(float(p), 1) for p in prob_export]
+                    prob_df['Risk_Flag'] = ['Flagged' if p >= threshold else 'Safe' for p in prob_export]
                     prob_df['Risk_Customer_Status'] = [
                         'Flagged to cancel subscription' if p >= threshold else 'Happy subscriber'
-                        for p in proba_full
+                        for p in prob_export
                     ]
                     xlsx_bytes = dataframe_to_xlsx_bytes(prob_df, sheet_name='Risk Analysis')
                     st.download_button(
