@@ -1517,13 +1517,12 @@ def step5_test():
                     ]
                     xlsx_bytes = dataframe_to_xlsx_bytes(prob_df, sheet_name='Risk Analysis')
                     st.download_button(
-                        label='Download Probability CSV',
+                        label='Download to Excel',
                         data=xlsx_bytes,
                         file_name='risk_probabilities.xlsx',
                         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                         key='download_prob_csv'
                     )
-                    st.caption('Download is exported as an Excel file (.xlsx) instead of CSV.')
                     st.markdown(
                         "<div style='font-size:0.9rem;color:#000;'>"
                         "<div style='font-weight:700;margin-bottom:0.2rem;'>Legend</div>"
