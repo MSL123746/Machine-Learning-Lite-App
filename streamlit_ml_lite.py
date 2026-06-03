@@ -474,6 +474,17 @@ def step1_model_and_data():
             if prev_features is None:
                 prev_features = []
             safe_defaults = [f for f in prev_features if f in cols]
+
+            select_col1, select_col2 = st.columns([1, 1])
+            with select_col1:
+                if st.button('Select All Features', key='select_all_features_btn'):
+                    st.session_state['feature_select'] = cols
+                    st.rerun()
+            with select_col2:
+                if st.button('Clear Features', key='clear_features_btn'):
+                    st.session_state['feature_select'] = []
+                    st.rerun()
+
             if ss['model_type'] == 'Clustering':
                 features = st.multiselect('Select feature columns', options=cols, default=safe_defaults, key='feature_select')
                 ss['features'] = features
