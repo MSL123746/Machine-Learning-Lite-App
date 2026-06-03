@@ -1335,6 +1335,95 @@ def step5_test():
         st.info('No trained model available.')
         return
     model = ss['trained_model']
+
+    # Risk Threshold Analysis (Binary Classification only)
+    if ss.get('model_type') == 'Binary classification' and hasattr(model, 'predict_proba'):
+        df = ss.get('uploaded_df')
+        features = ss.get('features')
+        if df is not None and features:
+            try:
+                import io as _io
+                X_full = pd.get_dummies(df[features], drop_first=True)
+                trained_cols = ss.get('training_columns')
+                if trained_cols is not None:
+                    X_full = X_full.reindex(columns=trained_cols, fill_value=0)
+                scaler = ss.get('settings', {}).get('_scaler')
+                if scaler is not None:
+                    num_cols_sc = [c for c in X_full.columns if pd.api.types.is_numeric_dtype(X_full[c])]
+                    if num_cols_sc:
+                        X_full[num_cols_sc] = scaler.transform(X_full[num_cols_sc])
+                proba_full = model.predict_proba(X_full)[:, 1]
+
+                threshold = st.slider(
+                    'Risk Tolerance',
+                    min_value=0.0, max_value=1.0, value=0.50, step=0.01,
+                    key='risk_threshold_slider'
+                )
+
+                flagged = int((proba_full >= threshold).sum())
+                safe = int((proba_full < threshold).sum())
+                total = len(proba_full)
+                flagged_rate = flagged / total * 100 if total > 0 else 0.0
+
+                st.subheader('Risk Threshold Analysis')
+                m_cols = st.columns(4)
+                m_cols[0].metric('Flagged Customers', flagged)
+                m_cols[1].metric('Safe Customers', safe)
+                m_cols[2].metric('Flagged Rate', f'{flagged_rate:.1f}%')
+                m_cols[3].metric('Active Threshold', f'{threshold:.2f}')
+                st.caption(f'Current default threshold: {threshold:.2f}')
+
+                # Binary Risk Threshold Analysis chart
+                eps = 1e-7
+                proba_clipped = np.clip(proba_full, eps, 1 - eps)
+                log_odds = np.log(proba_clipped / (1 - proba_clipped))
+                colors = ['red' if p >= threshold else 'green' for p in proba_full]
+
+                x_min, x_max = log_odds.min(), log_odds.max()
+                x_curve = np.linspace(x_min, x_max, 300)
+                y_curve = 1 / (1 + np.exp(-x_curve))
+
+                fig_rt, ax_rt = plt.subplots(figsize=(8, 4.5), dpi=140)
+                for xi, yi, ci in zip(log_odds, proba_full, colors):
+                    ax_rt.scatter(xi, yi, color=ci, alpha=0.6, s=20, zorder=2)
+                ax_rt.plot(x_curve, y_curve, color='steelblue', linewidth=2, label='Sigmoid curve', zorder=3)
+                ax_rt.axhline(y=threshold, color='black', linestyle='--', linewidth=1.5, label='Risk boundary', zorder=3)
+                ax_rt.set_xlabel('Log Odds Position')
+                ax_rt.set_ylabel('Predicted Cancellation Probability')
+                ax_rt.set_title('Binary Risk Threshold Analysis')
+                ax_rt.set_ylim(0, 1.0)
+                ax_rt.legend(loc='lower right', fontsize=10)
+                fig_rt.tight_layout(pad=0.3)
+
+                chart_cols = st.columns([5, 1])
+                with chart_cols[0]:
+                    buf_rt = _io.BytesIO()
+                    fig_rt.savefig(buf_rt, format='svg', bbox_inches='tight')
+                    plt.close(fig_rt)
+                    svg_rt = buf_rt.getvalue().decode('utf-8')
+                    st.markdown(f"<div style='width:100%;text-align:center'>{svg_rt}</div>", unsafe_allow_html=True)
+                with chart_cols[1]:
+                    st.write('')
+                    st.markdown(
+                        "<div style='margin-top:1.5rem;font-size:0.9rem'>"
+                        "<span style='color:red;font-weight:600'>Red:</span> Flagged to cancel subscription<br>"
+                        "<span style='color:green;font-weight:600'>Green:</span> Happy subscriber"
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+                    prob_df = pd.DataFrame({'Probability': proba_full, 'Flagged': proba_full >= threshold})
+                    csv_bytes = prob_df.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label='Download Probability CSV',
+                        data=csv_bytes,
+                        file_name='risk_probabilities.csv',
+                        mime='text/csv',
+                        key='download_prob_csv'
+                    )
+                st.markdown('---')
+            except Exception as e:
+                st.warning(f'Risk Threshold Analysis unavailable: {readable_exception(e)}')
+
     st.subheader('Single prediction')
     features = ss['features']
     if not features:
