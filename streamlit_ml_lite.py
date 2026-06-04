@@ -359,6 +359,70 @@ def build_prediction_summary(input_vals, prediction):
     return "\n".join(lines)
 
 
+def infer_class_reference_map(df: pd.DataFrame, target_col: str) -> dict:
+    if df is None or target_col not in df.columns:
+        return {}
+    if not pd.api.types.is_numeric_dtype(df[target_col]):
+        return {}
+
+    target_lower = str(target_col).lower()
+    candidate_cols = []
+
+    for src, dst in [('value', 'ref'), ('id', 'label'), ('code', 'name')]:
+        if src in target_lower:
+            candidate = str(target_col).replace(src, dst)
+            if candidate in df.columns and candidate != target_col:
+                candidate_cols.append(candidate)
+
+    if '-' in str(target_col):
+        prefix = str(target_col).split('-', 1)[0]
+        for suffix in ['Ref', 'Label', 'Name', 'Text']:
+            candidate = f"{prefix}-{suffix}"
+            if candidate in df.columns and candidate != target_col:
+                candidate_cols.append(candidate)
+
+    if '_' in str(target_col):
+        prefix = str(target_col).split('_', 1)[0]
+        for suffix in ['Ref', 'Label', 'Name', 'Text']:
+            candidate = f"{prefix}_{suffix}"
+            if candidate in df.columns and candidate != target_col:
+                candidate_cols.append(candidate)
+
+    prefix_token = str(target_col).split('-', 1)[0].split('_', 1)[0].lower()
+    for col in df.columns:
+        col_lower = str(col).lower()
+        if col == target_col:
+            continue
+        if pd.api.types.is_numeric_dtype(df[col]):
+            continue
+        if prefix_token and not col_lower.startswith(prefix_token):
+            continue
+        if any(token in col_lower for token in ['ref', 'label', 'name', 'text']):
+            candidate_cols.append(col)
+
+    seen = set()
+    ordered_candidates = []
+    for col in candidate_cols:
+        if col not in seen:
+            seen.add(col)
+            ordered_candidates.append(col)
+
+    unique_target_count = int(df[target_col].dropna().nunique())
+    for ref_col in ordered_candidates:
+        pairs = df[[target_col, ref_col]].dropna().drop_duplicates()
+        if pairs.empty:
+            continue
+        per_target_names = pairs.groupby(target_col)[ref_col].nunique()
+        if (per_target_names > 1).any():
+            continue
+        if int(pairs[target_col].nunique()) < min(2, unique_target_count):
+            continue
+        mapping = pairs.groupby(target_col)[ref_col].first().to_dict()
+        return {key: str(val) for key, val in mapping.items()}
+
+    return {}
+
+
 def dataframe_to_xlsx_bytes(df: pd.DataFrame, sheet_name: str = 'Sheet1') -> bytes:
     def column_letter(index: int) -> str:
         result = ''
@@ -1324,6 +1388,11 @@ def step4_results():
                 else:
                     overlapping_labels = [label for label in class_labels if label in observed_labels]
                     plot_labels = overlapping_labels if overlapping_labels else observed_labels
+                legend_display_labels = [str(label) for label in plot_labels]
+                if is_multiclass:
+                    class_text_map = infer_class_reference_map(ss.get('uploaded_df'), ss.get('target'))
+                    if class_text_map:
+                        legend_display_labels = [class_text_map.get(label, str(label)) for label in plot_labels]
                 display_labels = plot_labels
                 if is_multiclass:
                     display_labels = list(range(len(plot_labels)))
@@ -1365,7 +1434,7 @@ def step4_results():
                     with chart_col:
                         st.image(buf)
                     with legend_col:
-                        legend_lines = [f"{index}: {label}" for index, label in enumerate(plot_labels)]
+                        legend_lines = [f"{index}: {label}" for index, label in enumerate(legend_display_labels)]
                         st.markdown(
                             "<div style='margin-top: 0.6rem; margin-left: -18px;'></div>",
                             unsafe_allow_html=True,
