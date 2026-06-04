@@ -103,7 +103,7 @@ import sys
 print(f"Python executable: {sys.executable}")
 print(f"Python version: {sys.version}")
 
-DEPLOY_MARKER = "Build: 2026-06-02.1"
+DEPLOY_MARKER = "Build: 2026-06-04.2"
 
 def init_state():
     ss = st.session_state
