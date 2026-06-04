@@ -1600,12 +1600,10 @@ def step5_test():
 
     if 'last_prediction_value' in ss:
         st.success(f"Prediction: {ss['last_prediction_value']}")
-        if ss.get('last_prediction_proba') is not None:
-            st.write('Confidence / probabilities:')
-            st.write(ss['last_prediction_proba'])
 
-        action_cols = st.columns([5, 1])
-        with action_cols[1]:
+        # Keep the copy control directly under the prediction result for visibility.
+        summary_action_cols = st.columns([6, 1])
+        with summary_action_cols[1]:
             with st.popover('Copy Summary'):
                 st.text_area(
                     'Copy this text',
@@ -1613,6 +1611,10 @@ def step5_test():
                     height=220,
                     key=f"prediction_summary_text_area_{ss.get('last_prediction_refresh_id', 0)}"
                 )
+
+        if ss.get('last_prediction_proba') is not None:
+            st.write('Confidence / probabilities:')
+            st.write(ss['last_prediction_proba'])
     # Batch predictions feature removed
 
 
