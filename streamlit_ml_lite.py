@@ -1082,7 +1082,6 @@ def step4_results():
         # Clustering results: show cluster scatter plot and centroid table
         from sklearn.cluster import KMeans
         import io
-        import pandas as pd
         model = ss.get('trained_model')
         X_scaled = ss.get('clustering_X_scaled')
         features = ss.get('features')
@@ -1248,7 +1247,6 @@ def step4_results():
         features = ss['features']
         target = ss['target']
         if df is not None and features is not None and target is not None:
-            import pandas as pd
             st.markdown('<div style="margin-top:1.2em;margin-bottom:0.3em;font-weight:600;font-size:1.08rem;">Regression Results</div>', unsafe_allow_html=True)
             # Encode features to match training columns
             X_encoded = pd.get_dummies(df[features], drop_first=True)
@@ -1389,14 +1387,43 @@ def step4_results():
                     overlapping_labels = [label for label in class_labels if label in observed_labels]
                     plot_labels = overlapping_labels if overlapping_labels else observed_labels
                 legend_display_labels = [str(label) for label in plot_labels]
+                multiclass_xlsx_bytes = None
                 if is_multiclass:
                     class_text_map = infer_class_reference_map(ss.get('uploaded_df'), ss.get('target'))
                     if class_text_map:
                         legend_display_labels = [class_text_map.get(label, str(label)) for label in plot_labels]
+
+                    if ss.get('uploaded_df') is not None:
+                        export_df = ss['uploaded_df'].loc[y_val.index].copy()
+                        export_df = export_df.reset_index(drop=True)
+                        export_df = export_df.drop(columns=[c for c in export_df.columns if c == '::auto_unique_id::'], errors='ignore')
+                        export_df['Actual_Label'] = pd.Series(np.asarray(y_val)).reset_index(drop=True)
+                        export_df['Predicted_Label'] = pd.Series(np.asarray(y_pred)).reset_index(drop=True)
+
+                        proba_export = None
+                        if X_val is not None and hasattr(ss['trained_model'], 'predict_proba'):
+                            try:
+                                proba_export = ss['trained_model'].predict_proba(X_val)
+                            except Exception:
+                                proba_export = ss.get('_y_proba')
+                        else:
+                            proba_export = ss.get('_y_proba')
+
+                        if proba_export is not None and hasattr(ss['trained_model'], 'classes_'):
+                            proba_array = np.asarray(proba_export)
+                            model_classes = list(ss['trained_model'].classes_)
+                            if proba_array.ndim == 2 and proba_array.shape[1] == len(model_classes):
+                                for class_index, class_label in enumerate(model_classes):
+                                    class_name = class_text_map.get(class_label, str(class_label)) if class_text_map else str(class_label)
+                                    safe_class_name = class_name.replace(' ', '_')
+                                    export_df[f'Probability_{safe_class_name}'] = proba_array[:, class_index]
+                                export_df['Top_Probability'] = proba_array.max(axis=1)
+
+                        multiclass_xlsx_bytes = dataframe_to_xlsx_bytes(export_df, sheet_name='Scoring Results')
                 display_labels = plot_labels
                 if is_multiclass:
                     display_labels = list(range(len(plot_labels)))
-                fig, ax = plt.subplots(figsize=(4.6, 3.8) if is_multiclass else (3, 2.5), dpi=150)
+                fig, ax = plt.subplots(figsize=(3.9, 3.2) if is_multiclass else (3, 2.5), dpi=150)
                 cm = confusion_matrix(y_val, y_pred, labels=plot_labels)
                 disp = ConfusionMatrixDisplay(
                     confusion_matrix=cm,
@@ -1451,6 +1478,20 @@ def step4_results():
                         )
                     with spacer_col:
                         st.empty()
+
+                    # Keep the export control directly beneath the confusion matrix (left side).
+                    download_col, _, _ = st.columns([3.6, 1.7, 1.2], gap="small")
+                    with download_col:
+                        if multiclass_xlsx_bytes is not None:
+                            st.download_button(
+                                label='Download to Excel',
+                                data=multiclass_xlsx_bytes,
+                                file_name='multiclass_scoring_probabilities.xlsx',
+                                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                key='download_multiclass_scoring_xlsx'
+                            )
+                        else:
+                            st.info('Download file unavailable for current multi-class run.')
                 else:
                     st.image(buf)
     # Removed Model artifacts and download buttons as requested
@@ -1460,7 +1501,6 @@ def step4_results():
     if ss.get('model_type') in ['Regression', 'Binary classification'] and ss.get('uploaded_df') is not None:
         st.markdown('---')
         st.markdown('## Data Integrity & Correlation')
-        import pandas as pd
         import numpy as np
         df_corr = pd.get_dummies(ss['uploaded_df'], drop_first=False)
         selected_features = ss.get('features', [])
