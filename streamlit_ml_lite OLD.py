@@ -104,6 +104,7 @@ print(f"Python executable: {sys.executable}")
 print(f"Python version: {sys.version}")
 
 DEPLOY_MARKER = "Build: 2026-06-04.2"
+# Reminder: bump this marker on merged app changes so cloud deploys are easy to verify.
 
 def init_state():
     ss = st.session_state
@@ -1338,7 +1339,7 @@ def step4_results():
                 plot_cols = st.columns(2)
                 with plot_cols[0]:
                     import io
-                    fig, ax = plt.subplots(figsize=(4, 3), dpi=180)
+                    fig, ax = plt.subplots(figsize=(3.4, 2.55), dpi=180)
                     disp = ConfusionMatrixDisplay.from_predictions(
                         y_val, y_pred,
                         cmap=plt.cm.Blues,
@@ -1351,13 +1352,13 @@ def step4_results():
                     ax.tick_params(axis='both', labelsize=12)
                     fig.tight_layout(pad=0.2)
                     buf = io.BytesIO()
-                    fig.savefig(buf, format="svg", bbox_inches="tight")
+                    fig.savefig(buf, format='png', bbox_inches='tight')
                     plt.close(fig)
-                    svg = buf.getvalue().decode("utf-8")
-                    st.markdown(f"""<div style='width:100%;text-align:center'>{svg}</div>""", unsafe_allow_html=True)
+                    buf.seek(0)
+                    st.image(buf, use_container_width=True)
                 with plot_cols[1]:
                     import io
-                    fig2, ax2 = plt.subplots(figsize=(4, 3), dpi=180)
+                    fig2, ax2 = plt.subplots(figsize=(3.4, 2.55), dpi=180)
                     ax2.plot(fpr, tpr, color='darkorange', lw=2.5, label=f'ROC curve (area = {roc_auc:.2f})')
                     ax2.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
                     ax2.set_xlim([0.0, 1.0])
@@ -1369,10 +1370,10 @@ def step4_results():
                     ax2.tick_params(axis='both', labelsize=12)
                     fig2.tight_layout(pad=0.2)
                     buf2 = io.BytesIO()
-                    fig2.savefig(buf2, format="svg", bbox_inches="tight")
+                    fig2.savefig(buf2, format='png', bbox_inches='tight')
                     plt.close(fig2)
-                    svg2 = buf2.getvalue().decode("utf-8")
-                    st.markdown(f"""<div style='width:100%;text-align:center'>{svg2}</div>""", unsafe_allow_html=True)
+                    buf2.seek(0)
+                    st.image(buf2, use_container_width=True)
             else:
                 # Multi-class or fallback confusion matrix
                 class_labels = None
@@ -1388,85 +1389,17 @@ def step4_results():
                     plot_labels = overlapping_labels if overlapping_labels else observed_labels
                 legend_display_labels = [str(label) for label in plot_labels]
                 multiclass_xlsx_bytes = None
-                multiclass_export_df = None
-                multiclass_export_errors = []
                 if is_multiclass:
                     class_text_map = infer_class_reference_map(ss.get('uploaded_df'), ss.get('target'))
                     if class_text_map:
                         legend_display_labels = [class_text_map.get(label, str(label)) for label in plot_labels]
 
                     if ss.get('uploaded_df') is not None:
-                        source_df = ss['uploaded_df'].loc[y_val.index].copy().reset_index(drop=True)
-                        source_df = source_df.drop(columns=[c for c in source_df.columns if c == '::auto_unique_id::'], errors='ignore')
-
-                        def _norm_col_name(col_name):
-                            text = str(col_name).strip().lower()
-                            return ''.join(ch for ch in text if ch.isalnum())
-
-                        blocked_source_headers = {
-                            'CustomerID',
-                            'Top_Probability',
-                            'Target_Ref',
-                            '::auto_unique_id::',
-                        }
-                        blocked_feature_names = {_norm_col_name(col) for col in blocked_source_headers}
-
-                        selected_features = [
-                            c for c in (ss.get('features') or [])
-                            if c in source_df.columns
-                            and c != '::auto_unique_id::'
-                            and _norm_col_name(c) not in blocked_feature_names
-                        ]
-                        export_df = source_df[selected_features].copy()
-
-                        actual_target_series = pd.Series(np.asarray(y_val)).reset_index(drop=True)
-                        predicted_target_series = pd.Series(np.asarray(y_pred)).reset_index(drop=True)
-                        target_col_name = ss.get('target')
-                        if target_col_name in source_df.columns:
-                            target_value_series = source_df[target_col_name].reset_index(drop=True)
-                        else:
-                            target_value_series = actual_target_series
-
-                        normalized_class_text_map = {}
-                        if class_text_map:
-                            for raw_key, raw_value in class_text_map.items():
-                                text_value = str(raw_value)
-                                normalized_class_text_map[raw_key] = text_value
-                                normalized_class_text_map[str(raw_key)] = text_value
-                                try:
-                                    float_key = float(raw_key)
-                                    normalized_class_text_map[float_key] = text_value
-                                    if float_key.is_integer():
-                                        normalized_class_text_map[int(float_key)] = text_value
-                                except Exception:
-                                    pass
-
-                        def _to_class_text(value):
-                            if pd.isna(value):
-                                return ''
-                            if normalized_class_text_map:
-                                if value in normalized_class_text_map:
-                                    return normalized_class_text_map[value]
-                                value_as_text = str(value)
-                                if value_as_text in normalized_class_text_map:
-                                    return normalized_class_text_map[value_as_text]
-                            return str(value)
-
-                        export_df['Target_Value'] = target_value_series
-                        export_df['Actual-Target'] = actual_target_series
-                        export_df['Predicted-Target'] = predicted_target_series
-                        export_df['Actual_Label'] = actual_target_series.apply(_to_class_text)
-                        export_df['Predicted_Label'] = predicted_target_series.apply(_to_class_text)
-
-                        insert_after_col = 'Electronics-orders-12Mos'
-                        ordered_feature_cols = selected_features.copy()
-                        insertion_index = ordered_feature_cols.index(insert_after_col) + 1 if insert_after_col in ordered_feature_cols else len(ordered_feature_cols)
-                        ordered_columns = (
-                            ordered_feature_cols[:insertion_index]
-                            + ['Target_Value', 'Actual-Target', 'Predicted-Target', 'Actual_Label', 'Predicted_Label']
-                            + ordered_feature_cols[insertion_index:]
-                        )
-                        export_df = export_df[ordered_columns]
+                        export_df = ss['uploaded_df'].loc[y_val.index].copy()
+                        export_df = export_df.reset_index(drop=True)
+                        export_df = export_df.drop(columns=[c for c in export_df.columns if c == '::auto_unique_id::'], errors='ignore')
+                        export_df['Actual_Label'] = pd.Series(np.asarray(y_val)).reset_index(drop=True)
+                        export_df['Predicted_Label'] = pd.Series(np.asarray(y_pred)).reset_index(drop=True)
 
                         proba_export = None
                         if X_val is not None and hasattr(ss['trained_model'], 'predict_proba'):
@@ -1485,54 +1418,9 @@ def step4_results():
                                     class_name = class_text_map.get(class_label, str(class_label)) if class_text_map else str(class_label)
                                     safe_class_name = class_name.replace(' ', '_')
                                     export_df[f'Probability_{safe_class_name}'] = proba_array[:, class_index]
+                                export_df['Top_Probability'] = proba_array.max(axis=1)
 
-                        # Final guardrails: remove ID/top-prob columns and lock final column order.
-                        export_df = export_df.drop(
-                            columns=[c for c in export_df.columns if _norm_col_name(c) in blocked_feature_names],
-                            errors='ignore',
-                        )
-
-                        base_order = [
-                            c for c in ordered_columns
-                            if c in export_df.columns and _norm_col_name(c) not in blocked_feature_names
-                        ]
-                        probability_order = [
-                            c for c in export_df.columns
-                            if str(c).startswith('Probability_') and _norm_col_name(c) not in blocked_feature_names
-                        ]
-                        export_df = export_df[base_order + probability_order]
-
-                        required_headers = ['Target_Value', 'Actual-Target', 'Predicted-Target', 'Actual_Label', 'Predicted_Label']
-                        missing_required_headers = [c for c in required_headers if c not in export_df.columns]
-                        if missing_required_headers:
-                            multiclass_export_errors.append(
-                                'Missing required export columns: ' + ', '.join(missing_required_headers)
-                            )
-
-                        blocked_present = [
-                            c for c in export_df.columns
-                            if _norm_col_name(c) in blocked_feature_names
-                        ]
-                        if blocked_present:
-                            multiclass_export_errors.append(
-                                'Blocked columns still present: ' + ', '.join(blocked_present)
-                            )
-
-                        probability_start_index = next(
-                            (idx for idx, col in enumerate(export_df.columns) if str(col).startswith('Probability_')),
-                            len(export_df.columns),
-                        )
-                        expected_prefix = [c for c in base_order if c in export_df.columns]
-                        actual_prefix = export_df.columns.tolist()[:len(expected_prefix)]
-                        if actual_prefix != expected_prefix:
-                            multiclass_export_errors.append('Export column order does not match the required layout.')
-
-                        if probability_start_index < len(expected_prefix):
-                            multiclass_export_errors.append('Probability columns are not placed after the required export columns.')
-
-                        multiclass_export_df = export_df.copy()
-                        if not multiclass_export_errors:
-                            multiclass_xlsx_bytes = dataframe_to_xlsx_bytes(export_df, sheet_name='Scoring Results')
+                        multiclass_xlsx_bytes = dataframe_to_xlsx_bytes(export_df, sheet_name='Scoring Results')
                 display_labels = plot_labels
                 if is_multiclass:
                     display_labels = list(range(len(plot_labels)))
@@ -1595,15 +1483,7 @@ def step4_results():
                     # Keep the export control directly beneath the confusion matrix (left side).
                     download_col, _, _ = st.columns([3.6, 1.7, 1.2], gap="small")
                     with download_col:
-                        if multiclass_export_errors:
-                            st.error('Export schema check failed.')
-                            for error_text in multiclass_export_errors:
-                                st.write(f'- {error_text}')
-                        elif multiclass_xlsx_bytes is not None:
-                            st.caption(
-                                'Download columns verified: CustomerID and Top_Probability removed; '
-                                'Actual_Label and Predicted_Label included.'
-                            )
+                        if multiclass_xlsx_bytes is not None:
                             st.download_button(
                                 label='Download to Excel',
                                 data=multiclass_xlsx_bytes,
@@ -1613,9 +1493,6 @@ def step4_results():
                             )
                         else:
                             st.info('Download file unavailable for current multi-class run.')
-                        if multiclass_export_df is not None:
-                            with st.expander('Preview downloadable dataset', expanded=True):
-                                st.dataframe(multiclass_export_df.head(10), use_container_width=True)
                 else:
                     st.image(buf)
     # Removed Model artifacts and download buttons as requested
