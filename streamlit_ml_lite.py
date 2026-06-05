@@ -1613,9 +1613,177 @@ def step4_results():
                             )
                         else:
                             st.info('Download file unavailable for current multi-class run.')
-                        if multiclass_export_df is not None:
-                            with st.expander('Preview downloadable dataset', expanded=True):
-                                st.dataframe(multiclass_export_df.head(10), use_container_width=True)
+
+                        st.markdown('### Predictor')
+                        predictor_values = {}
+
+                        def _predictor_norm_col_name(col_name):
+                            text = str(col_name).strip().lower()
+                            return ''.join(ch for ch in text if ch.isalnum())
+
+                        blocked_predictor_headers = {
+                            'CustomerID',
+                            'Top_Probability',
+                            'Target_Ref',
+                            '::auto_unique_id::',
+                        }
+                        blocked_predictor_names = {_predictor_norm_col_name(col) for col in blocked_predictor_headers}
+                        target_name_normalized = _predictor_norm_col_name(ss.get('target', ''))
+
+                        predictor_features = [
+                            c for c in (ss.get('features') or [])
+                            if _predictor_norm_col_name(c) not in blocked_predictor_names
+                            and _predictor_norm_col_name(c) != target_name_normalized
+                            and not str(c).strip().lower().startswith('target-ref')
+                            and c != '::auto_unique_id::'
+                        ]
+                        predictor_input_cols = st.columns(2)
+                        for idx, feature_name in enumerate(predictor_features):
+                            if ss.get('uploaded_df') is None or feature_name not in ss['uploaded_df'].columns:
+                                continue
+                            dtype = ss['uploaded_df'][feature_name].dtype
+                            if pd.api.types.is_numeric_dtype(dtype):
+                                default_val = float(ss['uploaded_df'][feature_name].dropna().median())
+                                predictor_values[feature_name] = predictor_input_cols[idx % 2].number_input(
+                                    feature_name,
+                                    value=default_val,
+                                    key=f'mc_stage4_predict_num_{feature_name}',
+                                )
+                            else:
+                                options = ss['uploaded_df'][feature_name].dropna().unique().tolist()
+                                if options:
+                                    predictor_values[feature_name] = predictor_input_cols[idx % 2].selectbox(
+                                        feature_name,
+                                        options=options,
+                                        key=f'mc_stage4_predict_cat_{feature_name}',
+                                    )
+
+                        if st.button('Run Predictor', key='mc_stage4_run_predictor_btn'):
+                            try:
+                                predictor_raw = pd.DataFrame([predictor_values])
+
+                                # Match training order: scale raw numeric feature columns first.
+                                scaler = ss.get('settings', {}).get('_scaler')
+                                if scaler is not None and not predictor_raw.empty:
+                                    raw_numeric_cols = [
+                                        c for c in predictor_raw.columns
+                                        if pd.api.types.is_numeric_dtype(predictor_raw[c])
+                                    ]
+                                    scaler_feature_names = list(getattr(scaler, 'feature_names_in_', []))
+                                    cols_to_scale = [
+                                        c for c in raw_numeric_cols
+                                        if not scaler_feature_names or c in scaler_feature_names
+                                    ]
+                                    if cols_to_scale:
+                                        predictor_raw.loc[:, cols_to_scale] = scaler.transform(predictor_raw[cols_to_scale])
+
+                                predictor_X = pd.get_dummies(
+                                    predictor_raw,
+                                    columns=[
+                                        c for c in predictor_raw.columns
+                                        if not pd.api.types.is_numeric_dtype(predictor_raw[c].dtype)
+                                    ],
+                                    drop_first=True,
+                                )
+
+                                # Safety filter: remove blocked/target-derived columns even if they slip in.
+                                predictor_X = predictor_X.drop(
+                                    columns=[
+                                        c for c in predictor_X.columns
+                                        if _predictor_norm_col_name(c).startswith('targetref')
+                                        or _predictor_norm_col_name(c) in blocked_predictor_names
+                                    ],
+                                    errors='ignore',
+                                )
+
+                                expected_columns = ss.get('training_columns')
+                                if expected_columns is None and ss.get('_X_val') is not None:
+                                    expected_columns = list(ss['_X_val'].columns)
+                                if expected_columns is None and hasattr(ss.get('trained_model'), 'feature_names_in_'):
+                                    expected_columns = list(ss['trained_model'].feature_names_in_)
+
+                                if expected_columns is None:
+                                    st.error('Predictor schema unavailable. Please retrain the model, then try again.')
+                                    st.stop()
+
+                                predictor_X = predictor_X.reindex(columns=expected_columns, fill_value=0)
+
+                                predictor_pred = ss['trained_model'].predict(predictor_X)[0]
+                                if class_text_map:
+                                    predictor_label = class_text_map.get(predictor_pred, str(predictor_pred))
+                                else:
+                                    predictor_label = str(predictor_pred)
+                                st.success(f'Predicted class: {predictor_label} ({predictor_pred})')
+
+                                summary_lines = [
+                                    f"Predicted class: {predictor_label} ({predictor_pred})",
+                                    "",
+                                    "Inputs:",
+                                ]
+                                for feature_name in predictor_features:
+                                    if feature_name in predictor_values:
+                                        summary_lines.append(f"- {feature_name}: {predictor_values[feature_name]}")
+
+                                if hasattr(ss['trained_model'], 'predict_proba') and hasattr(ss['trained_model'], 'classes_'):
+                                    predictor_proba = ss['trained_model'].predict_proba(predictor_X)[0]
+                                    proba_rows = []
+                                    for class_idx, class_val in enumerate(ss['trained_model'].classes_):
+                                        class_label = class_text_map.get(class_val, str(class_val)) if class_text_map else str(class_val)
+                                        proba_rows.append(
+                                            {
+                                                'Class': class_label,
+                                                'Class Value': class_val,
+                                                'Probability': float(predictor_proba[class_idx]),
+                                            }
+                                        )
+                                    proba_df = pd.DataFrame(proba_rows).sort_values('Probability', ascending=False)
+                                    st.dataframe(proba_df, use_container_width=True)
+                                    summary_lines.extend([
+                                        "",
+                                        "Class probabilities:",
+                                    ])
+                                    for _, row in proba_df.iterrows():
+                                        summary_lines.append(
+                                            f"- {row['Class']} ({row['Class Value']}): {float(row['Probability']):.4f}"
+                                        )
+
+                                mc_prediction_summary = "\n".join(summary_lines)
+                                summary_action_cols = st.columns([4, 3])
+                                with summary_action_cols[1]:
+                                    with st.popover('Copy Summary'):
+                                        st.text_area(
+                                            'Copy this text',
+                                            value=mc_prediction_summary,
+                                            height=220,
+                                            key='mc_stage4_prediction_summary_text_area'
+                                        )
+                            except Exception as predictor_error:
+                                st.error(f'Predictor failed: {readable_exception(predictor_error)}')
+                                try:
+                                    model_expected_cols = []
+                                    if hasattr(ss.get('trained_model'), 'feature_names_in_'):
+                                        model_expected_cols = list(ss['trained_model'].feature_names_in_)
+                                    sent_cols = predictor_X.columns.tolist() if 'predictor_X' in locals() else []
+                                    sent_target_ref_cols = [c for c in sent_cols if 'target-ref' in str(c).lower() or 'target_ref' in str(c).lower()]
+                                    expected_target_ref_cols = [c for c in model_expected_cols if 'target-ref' in str(c).lower() or 'target_ref' in str(c).lower()]
+                                    st.caption(
+                                        f"Debug: sent={len(sent_cols)} cols, model_expected={len(model_expected_cols)} cols, "
+                                        f"sent_target_ref={len(sent_target_ref_cols)}, expected_target_ref={len(expected_target_ref_cols)}"
+                                    )
+                                    with st.expander('Predictor debug details', expanded=False):
+                                        st.write('Sent columns sample:', sent_cols[:30])
+                                        st.write('Model expected columns sample:', model_expected_cols[:30])
+                                        if sent_target_ref_cols:
+                                            st.write('Sent Target-Ref columns:', sent_target_ref_cols)
+                                        if expected_target_ref_cols:
+                                            st.write('Expected Target-Ref columns:', expected_target_ref_cols)
+                                except Exception:
+                                    pass
+
+                        # Validation table intentionally hidden in Stage 4 for multi-class scoring.
+                        # if multiclass_export_df is not None:
+                        #     with st.expander('Preview downloadable dataset', expanded=True):
+                        #         st.dataframe(multiclass_export_df.head(10), use_container_width=True)
                 else:
                     st.image(buf)
     # Removed Model artifacts and download buttons as requested
