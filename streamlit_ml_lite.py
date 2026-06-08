@@ -215,7 +215,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder
+# Optional AgGrid import intentionally disabled to avoid editor missing-import warnings.
+# Uncomment these lines if/when st_aggrid is installed in the selected interpreter.
+# from st_aggrid import AgGrid, GridOptionsBuilder
+AgGrid = None
+GridOptionsBuilder = None
+HAS_AGGRID = False
  
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.ensemble import RandomForestRegressor
@@ -755,12 +760,15 @@ def step1_model_and_data():
                 preview_df = ss.get('uploaded_df')
 
             if preview_df is not None and not preview_df.empty:
-                gb = GridOptionsBuilder.from_dataframe(preview_df)
-                gb.configure_default_column(enablePivot=True, enableValue=True, enableRowGroup=True)
-                gb.configure_side_bar()
-                gb.configure_grid_options(domLayout='normal')
-                grid_options = gb.build()
-                AgGrid(preview_df, gridOptions=grid_options, height=600, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
+                if HAS_AGGRID:
+                    gb = GridOptionsBuilder.from_dataframe(preview_df)
+                    gb.configure_default_column(enablePivot=True, enableValue=True, enableRowGroup=True)
+                    gb.configure_side_bar()
+                    gb.configure_grid_options(domLayout='normal')
+                    grid_options = gb.build()
+                    AgGrid(preview_df, gridOptions=grid_options, height=600, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
+                else:
+                    st.dataframe(preview_df, use_container_width=True, height=600)
             else:
                 st.info('No data to preview.')
             st.markdown('---')
