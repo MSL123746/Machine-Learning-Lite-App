@@ -536,7 +536,19 @@ def sidebar_steps():
     _inject_stepper_css()
     ss = st.session_state
     ss = st.session_state
-    if ss.get('model_type') == 'Clustering':
+    clustering_flow_active = (
+        ss.get('model_type') == 'Clustering'
+        and ss.get('clustering_dataset_updated', False)
+        and ss.get('uploaded_df') is not None
+    )
+
+    if clustering_flow_active:
+        steps = [
+            ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
+            ('Stage 2', 'Training', 'Start training and view logs/progress.'),
+            ('Stage 3', 'Scoring', 'Inspect metrics and download model.'),
+        ]
+    elif ss.get('model_type') == 'Clustering':
         steps = [
             ('Stage 1', 'Load Data', 'Upload CSV, choose target and features.'),
             ('Stage 2', 'Split Data', 'Select train fraction and algorithm settings.'),
@@ -603,6 +615,7 @@ def step1_model_and_data():
                 if auto_cols:
                     df = df.drop(columns=auto_cols)
                 st.session_state['uploaded_df'] = df
+                st.session_state['clustering_dataset_updated'] = True
                 # Immediately notify user if missing values are present in uploaded data
                 missing_total = df.isna().sum().sum()
                 if missing_total > 0:
@@ -621,6 +634,7 @@ def step1_model_and_data():
                     'features', 'target', 'step', 'model_type', 'settings', 'trained_model', 'metrics', '_X_val', '_y_val', '_y_proba', 'training_logs', 'training_status', 'training_columns', 'feature_importances', 'coefficients', 'clustering_X_scaled', 'optimal_n_clusters', 'cluster_labels']:
                     del ss[k]
             ss['has_left_upload'] = False
+            ss['clustering_dataset_updated'] = False
             init_state()
         if ss.get('uploaded_df') is not None and ss.get('has_left_upload', False):
             st.button('Reset', on_click=reset_selections, help='Clear uploaded data and start over')
@@ -675,31 +689,6 @@ def step1_model_and_data():
                 ss['feature_select_values'] = features
                 ss['features'] = features
                 ss['target'] = None
-                if features:
-                    next_btn_css = """
-                    <style>
-                    div.stButton > button {
-                        background-color: #2563eb !important;
-                        color: #fff !important;
-                        font-weight: bold !important;
-                        border-radius: 6px !important;
-                        border: none !important;
-                        padding: 0.5em 2em !important;
-                        font-size: 1.1rem !important;
-                        box-shadow: 0 2px 8px rgba(37,99,235,0.08) !important;
-                        margin-bottom: 0.5em !important;
-                        transition: background 0.2s;
-                    }
-                    div.stButton > button:hover {
-                        background-color: #1741a6 !important;
-                        color: #fff !important;
-                    }
-                    </style>
-                    """
-                    st.markdown(next_btn_css, unsafe_allow_html=True)
-                    if st.button('Next'):
-                        ss['step'] = 2
-                        st.rerun()
             else:
                 def is_valid_target_select(col):
                     return not (
@@ -1026,7 +1015,12 @@ def step3_training():
             p.progress(100)
             log('Training complete.')
             ss['training_logs'] = logs
-            ss['step'] = 4
+            clustering_flow_active = (
+                ss.get('model_type') == 'Clustering'
+                and ss.get('clustering_dataset_updated', False)
+                and ss.get('uploaded_df') is not None
+            )
+            ss['step'] = 3 if clustering_flow_active else 4
         except Exception as e:
             ss['training_status'] = 'error'
             st.error(readable_exception(e))
@@ -1037,7 +1031,15 @@ def step3_training():
     if ss.get('training_logs'):
         st.text_area('Logs', value='\n'.join(ss['training_logs']), height=200)
     if ss.get('training_status') == 'done':
-        st.success('Training finished — go to Step 4 to see results.')
+        clustering_flow_active = (
+            ss.get('model_type') == 'Clustering'
+            and ss.get('clustering_dataset_updated', False)
+            and ss.get('uploaded_df') is not None
+        )
+        if clustering_flow_active:
+            st.success('Training finished - go to Step 3 to see results.')
+        else:
+            st.success('Training finished - go to Step 4 to see results.')
 
 
 def step4_results():
@@ -1875,18 +1877,33 @@ def main():
     sidebar_steps()
     # Help slider removed
     step = st.session_state['step']
-    if step == 1:
-        step1_model_and_data()
-    elif step == 2:
-        step2_settings()
-    elif step == 3:
-        # Start training automatically when entering Training step
-        start_training()
-        step3_training()
-    elif step == 4:
-        step4_results()
-    elif step == 5:
-        step5_test()
+    clustering_flow_active = (
+        ss.get('model_type') == 'Clustering'
+        and ss.get('clustering_dataset_updated', False)
+        and ss.get('uploaded_df') is not None
+    )
+
+    if clustering_flow_active:
+        if step == 1:
+            step1_model_and_data()
+        elif step == 2:
+            start_training()
+            step3_training()
+        elif step >= 3:
+            step4_results()
+    else:
+        if step == 1:
+            step1_model_and_data()
+        elif step == 2:
+            step2_settings()
+        elif step == 3:
+            # Start training automatically when entering Training step
+            start_training()
+            step3_training()
+        elif step == 4:
+            step4_results()
+        elif step == 5:
+            step5_test()
     # CV step and computer_vision_ui removed
 
 
