@@ -1869,7 +1869,6 @@ def main():
 
     init_state()
     ss = st.session_state
-    st.sidebar.caption(DEPLOY_MARKER)
 
     # Only call the step functions and keep the bottom section
 
